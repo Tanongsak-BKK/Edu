@@ -1,4 +1,4 @@
-# main.py  (EduGen API — TH Sarabun *Regular* only)
+# main.py  (EduGen API — Clean Version)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +39,6 @@ if firebase_admin is not None and firestore is not None:
     try:
         if not firebase_admin._apps:
             cred = credentials.Certificate(cred_path)
-            # projectId ใส่ใน options ได้ (optional)
             firebase_admin.initialize_app(
                 cred,
                 {"projectId": FIREBASE_PROJECT_ID} if FIREBASE_PROJECT_ID else None,
@@ -92,7 +91,6 @@ app.add_middleware(
 
 # ---------- Config ----------
 NEAR_DUP_THRESHOLD = 0.78
-MAX_TRIES_PER_BATCH = 4
 CTX_CHAR_LIMIT = 15000
 EXCLUDE_LIST_LIMIT = 30
 
@@ -246,11 +244,6 @@ class SummarizeOut(BaseModel):
     data_points: List[Dict[str, str]]
 
 # ---------- Endpoints ----------
-@app.get("/auth/ping")
-def auth_ping(request: Request):
-    uid = _require_user_id(request)
-    return {"ok": True, "uid": uid}
-
 @app.post("/pdf/extract")
 async def pdf_extract(pdf: UploadFile = File(...)):
     if not pdf.filename.lower().endswith(".pdf"):
@@ -461,8 +454,6 @@ def _gen_tf_once(ctx: str, n: int, exclude_list: List[str], topic_hints: Optiona
     qs = data.get("questions", [])
     return _filter_near_dups(qs, exclude_list, threshold=NEAR_DUP_THRESHOLD)
 
-# 🚀 🚀 🚀 อัปเดตฟังก์ชันฝั่งข้อสอบให้ทำงานไวขึ้น (Over-fetching) 🚀 🚀 🚀
-
 @app.post("/quiz/mcq")
 def quiz_mcq(body: QuizIn):
     ctx = (body.context or "").strip()
@@ -475,21 +466,17 @@ def quiz_mcq(body: QuizIn):
     collected: List[Dict[str, Any]] = []
     tries = 0
     
-    # ลดจำนวนรอบเผื่อล้มเหลว (เพราะเราจะขอเผื่ออยู่แล้ว)
     while len(collected) < n and tries < 2: 
         need = n - len(collected)
         excludes_now = exclude_list + [str(q.get("question") or "") for q in collected]
         topic_hints = topics[:need] if topics else None
         
-        # 🚀 OVER-FETCHING: ขอข้อสอบเผื่อไปเลย 3 ข้อในรอบเดียว (ถ้าเป็นการขอรอบแรก)
         request_n = need + 3 if tries == 0 else need
-        
         batch = _gen_mcq_once(ctx, request_n, excludes_now, topic_hints)
         
         for q in batch:
-            if len(collected) >= n: # ถ้าได้ครบ n ข้อแล้ว ให้หยุดทันที
+            if len(collected) >= n: 
                 break
-            # เช็คข้อสอบซ้ำ
             if all(_similar(str(q.get("question", "")), str(e.get("question", ""))) < NEAR_DUP_THRESHOLD for e in collected):
                 collected.append(q)
                 
@@ -517,13 +504,11 @@ def quiz_tf(body: QuizIn):
         excludes_now = exclude_list + [str(q.get("question") or "") for q in collected]
         topic_hints = topics[:need] if topics else None
         
-        # 🚀 OVER-FETCHING: ขอข้อสอบเผื่อไปเลย 3 ข้อในรอบเดียว
         request_n = need + 3 if tries == 0 else need
-        
         batch = _gen_tf_once(ctx, request_n, excludes_now, topic_hints)
         
         for q in batch:
-            if len(collected) >= n: # ถ้าได้ครบ n ข้อแล้ว ให้หยุดทันที
+            if len(collected) >= n: 
                 break
             if all(_similar(str(q.get("question", "")), str(e.get("question", ""))) < NEAR_DUP_THRESHOLD for e in collected):
                 collected.append(q)
@@ -534,8 +519,6 @@ def quiz_tf(body: QuizIn):
         tries += 1
         
     return {"questions": collected[:n]}
-
-# -------------------------------------------------------------------------
 
 @app.post("/qa")
 def qa(body: QAIn):
@@ -646,16 +629,9 @@ class QuizOut(BaseModel):
     question_ids: List[int]
     created_at: str
     updated_at: str
-class MergeIn(BaseModel):
-    quiz_ids: List[int]
-    title: str = "แบบทดสอบรวม"
 class ExportOpts(BaseModel):
     shuffleChoices: bool = False
     showAnswers: bool = False
-class OneIdIn(BaseModel):
-    id: int
-class TitleOnlyIn(BaseModel):
-    title: str
 
 @app.get("/bank/questions", response_model=List[QuestionOut])
 def bank_list_questions(request: Request):
@@ -739,40 +715,10 @@ def bank_update_question(request: Request, qid: int, body: QuestionIn):
             return qs[i]
     raise HTTPException(404, "Question not found")
 
-@app.delete("/bank/questions/{qid}")
-def bank_delete_question(request: Request, qid: int):
-    uid = _require_user_id(request)
-    paths = _qb_paths(uid)
-    qs = _read_json(paths["questions"], [])
-    new_qs = [x for x in qs if int(x.get("id", -1)) != qid]
-    if len(new_qs) == len(qs):
-        raise HTTPException(404, "Question not found")
-    _write_json(paths["questions"], new_qs)
-    quizzes = _read_json(paths["quizzes"], [])
-    changed = False
-    for qz in quizzes:
-        before = len(qz.get("question_ids", []))
-        qz["question_ids"] = [i for i in qz.get("question_ids", []) if i != qid]
-        if len(qz["question_ids"]) != before:
-            qz["updated_at"] = datetime.utcnow().isoformat() + "Z"
-            changed = True
-    if changed:
-        _write_json(paths["quizzes"], quizzes)
-    return {"ok": True}
-
 @app.get("/bank/quizzes", response_model=List[QuizOut])
 def bank_list_quizzes(request: Request):
     uid = _require_user_id(request)
     return _read_json(_qb_paths(uid)["quizzes"], [])
-
-@app.get("/bank/quizzes/{quiz_id}", response_model=QuizOut)
-def bank_get_quiz(request: Request, quiz_id: int):
-    uid = _require_user_id(request)
-    quizzes = _read_json(_qb_paths(uid)["quizzes"], [])
-    qz = next((x for x in quizzes if int(x.get("id", -1)) == quiz_id), None)
-    if not qz:
-        raise HTTPException(404, "Quiz not found")
-    return qz
 
 @app.post("/bank/quizzes", response_model=QuizOut)
 def bank_create_quiz(request: Request, body: QuizCreateIn):
@@ -788,23 +734,6 @@ def bank_create_quiz(request: Request, body: QuizCreateIn):
         "id": _next_id(quizzes),
         "title": (body.title or "แบบทดสอบ").strip(),
         "question_ids": keep,
-        "created_at": now,
-        "updated_at": now,
-    }
-    quizzes.append(payload)
-    _write_json(paths["quizzes"], quizzes)
-    return payload
-
-@app.post("/bank/quizzes/create-empty", response_model=QuizOut)
-def bank_create_quiz_empty(request: Request, body: TitleOnlyIn):
-    uid = _require_user_id(request)
-    paths = _qb_paths(uid)
-    quizzes = _read_json(paths["quizzes"], [])
-    now = datetime.utcnow().isoformat() + "Z"
-    payload = {
-        "id": _next_id(quizzes),
-        "title": (body.title or "แบบทดสอบ").strip(),
-        "question_ids": [],
         "created_at": now,
         "updated_at": now,
     }
@@ -835,47 +764,6 @@ def bank_update_quiz(request: Request, quiz_id: int, body: QuizCreateIn):
             return quizzes[i]
     raise HTTPException(404, "Quiz not found")
 
-@app.post("/bank/quizzes/{quiz_id}/append", response_model=QuizOut)
-def bank_quiz_append_question(request: Request, quiz_id: int, body: OneIdIn):
-    uid = _require_user_id(request)
-    paths = _qb_paths(uid)
-    quizzes = _read_json(paths["quizzes"], [])
-    questions = _read_json(paths["questions"], [])
-    qids_valid = set(int(q.get("id", -1)) for q in questions)
-    if int(body.id) not in qids_valid:
-        raise HTTPException(404, "Question not found")
-    for i, qz in enumerate(quizzes):
-        if int(qz.get("id", -1)) == quiz_id:
-            ids = list(qz.get("question_ids", []))
-            if int(body.id) not in ids:
-                ids.append(int(body.id))
-            quizzes[i] = {
-                **qz,
-                "question_ids": ids,
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-            }
-            _write_json(paths["quizzes"], quizzes)
-            return quizzes[i]
-    raise HTTPException(404, "Quiz not found")
-
-@app.post("/bank/quizzes/{quiz_id}/remove", response_model=QuizOut)
-def bank_quiz_remove_question(request: Request, quiz_id: int, body: OneIdIn):
-    uid = _require_user_id(request)
-    paths = _qb_paths(uid)
-    quizzes = _read_json(paths["quizzes"], [])
-    for i, qz in enumerate(quizzes):
-        if int(qz.get("id", -1)) == quiz_id:
-            ids_before = list(qz.get("question_ids", []))
-            ids_after = [x for x in ids_before if int(x) != int(body.id)]
-            quizzes[i] = {
-                **qz,
-                "question_ids": ids_after,
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-            }
-            _write_json(paths["quizzes"], quizzes)
-            return quizzes[i]
-    raise HTTPException(404, "Quiz not found")
-
 @app.delete("/bank/quizzes/{quiz_id}")
 def bank_delete_quiz(request: Request, quiz_id: int):
     uid = _require_user_id(request)
@@ -886,32 +774,6 @@ def bank_delete_quiz(request: Request, quiz_id: int):
         raise HTTPException(404, "Quiz not found")
     _write_json(paths["quizzes"], new_qz)
     return {"ok": True}
-
-@app.post("/bank/quizzes/merge", response_model=QuizOut)
-def bank_merge_quizzes(request: Request, body: MergeIn):
-    uid = _require_user_id(request)
-    paths = _qb_paths(uid)
-    quizzes = _read_json(paths["quizzes"], [])
-    by_id = {int(x["id"]): x for x in quizzes}
-    ids_set: List[int] = []
-    for qid in body.quiz_ids:
-        src = by_id.get(int(qid))
-        if not src:
-            continue
-        for i in src.get("question_ids", []):
-            if i not in ids_set:
-                ids_set.append(i)
-    now = datetime.utcnow().isoformat() + "Z"
-    payload = {
-        "id": _next_id(quizzes),
-        "title": (body.title or "แบบทดสอบรวม").strip(),
-        "question_ids": ids_set,
-        "created_at": now,
-        "updated_at": now,
-    }
-    quizzes.append(payload)
-    _write_json(paths["quizzes"], quizzes)
-    return payload
 
 # ----- Export PDF -----
 try:

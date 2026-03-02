@@ -329,7 +329,6 @@ export default function Home() {
   const API = getAPIBase();
 
   // -------- Auth / Notes --------
-  const [userId, setUserId] = useState<string>("demo-user");
   const [authHeader, setAuthHeader] = useState<Record<string, string>>({ "X-User-Id": "demo-user" });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -375,7 +374,6 @@ export default function Home() {
           const newHeader = { Authorization: `Bearer ${token}` };
 
           setCurrentUser(user);
-          setUserId(user.uid);
           setAuthHeader(newHeader);
 
           fetchHistoryDirect(newHeader);
@@ -388,10 +386,8 @@ export default function Home() {
         try {
           const uid = localStorage.getItem("uid");
           const finalUid = uid && uid.trim() ? uid.trim() : "demo-user";
-          setUserId(finalUid);
           setAuthHeader({ "X-User-Id": finalUid });
         } catch {
-          setUserId("demo-user");
           setAuthHeader({ "X-User-Id": "demo-user" });
         }
       }
@@ -432,7 +428,6 @@ export default function Home() {
     setLockedCount(0); 
     setHiddenContext("");
     setQaInput("");
-    setQaAnswer("");
     setQaHistory([]);
     topicsRef.current = [];
     seenKeysRef.current = { mcq: new Set(), tf: new Set() };
@@ -473,7 +468,6 @@ export default function Home() {
     setPdf(null);
     setPdfText("");
     setQaInput("");
-    setQaAnswer("");
     setQaHistory(item.qa_history || []);
 
     topicsRef.current = [];
@@ -565,7 +559,7 @@ export default function Home() {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => { autosaveNote(fileId, note); }, 1200);
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); };
-  }, [note, fileId, userId, authHeader]);
+  }, [note, fileId, authHeader]);
 
   /* -------- App states -------- */
   const [text, setText] = useState("");
@@ -581,7 +575,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [qaInput, setQaInput] = useState("");
-  const [qaAnswer, setQaAnswer] = useState("");
 
   const [qaHistory, setQaHistory] = useState<QAPair[]>([]);
 
@@ -654,7 +647,6 @@ export default function Home() {
   }, [text, pdfText, hiddenContext]);
 
   const countByType = (t: "mcq" | "tf") => questions.filter((q) => q.type === t).length;
-  const resetAllViews = () => { setError(null); setScore(null); setQuestions([]); setAnswers({}); setQaAnswer(""); seenKeysRef.current.mcq.clear(); seenKeysRef.current.tf.clear(); topicsRef.current = []; setLockedCount(0); };
   const resetQuizOnly = () => { setScore(null); setQuestions([]); setAnswers({}); seenKeysRef.current.mcq.clear(); seenKeysRef.current.tf.clear(); topicsRef.current = []; setLockedCount(0); };
 
   const ensureTopics = async () => {
@@ -720,7 +712,7 @@ export default function Home() {
     const prevLockedCount = lockedCount;
 
     setLoading(true);
-    setLoadingText("กำลังวิเคราะห์และสรุปเนื้อหา..."); // 🟢 เรียกใช้ Loading Overlay
+    setLoadingText("กำลังวิเคราะห์และสรุปเนื้อหา"); // 🟢 เรียกใช้ Loading Overlay
     setError(null);
     setOverview("");
     setKeyPoints([]);
@@ -733,7 +725,6 @@ export default function Home() {
       setScore(null);
       setLockedCount(0);
       setQaInput("");
-      setQaAnswer("");
     }
 
     try {
@@ -805,7 +796,7 @@ export default function Home() {
     const want = Math.min(BATCH_SIZE, remain); 
     
     setLoading(true); 
-    setLoadingText(`กำลังสร้างข้อสอบ ${type === "mcq" ? "แบบเลือกตอบ (MCQ)" : "แบบถูกผิด (T/F)"} เพิ่มเติม...`); // 🟢 เรียกใช้ Loading Overlay
+    setLoadingText(`กำลังสร้างข้อสอบ ${type === "mcq" ? "แบบปรนัย " : "แบบถูกผิด "} เพิ่ม`); // 🟢 เรียกใช้ Loading Overlay
     
     await ensureTopics(); 
     const topicSlice = topicsRef.current.splice(0, want);
@@ -1028,7 +1019,7 @@ export default function Home() {
 
   const isAllAnswered = questions.length > 0 && Object.keys(answers).length === questions.length;
 
-  useEffect(() => { firstLoadRef.current = true; loadNote(fileId); }, [fileId, userId, authHeader]);
+  useEffect(() => { firstLoadRef.current = true; loadNote(fileId); }, [fileId, authHeader]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans" onMouseMove={handleMouseMove}>
@@ -1201,13 +1192,17 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="bg-zinc-900/80 px-4 sm:px-6 py-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-t border-zinc-800/80">
+                {/* --- Control Bar --- */}
+                <div className="bg-zinc-900/80 px-4 sm:px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4 border-t border-zinc-800/80">
                   
-                  <div className="flex-shrink-0 w-full lg:w-auto">
+                  {/* --- ส่วนซ้าย: ชื่อไฟล์ (ปรับปรุง: ล็อกพื้นที่และตัดคำ) --- */}
+                  <div className="w-full lg:max-w-[30%] xl:max-w-[40%] flex justify-center lg:justify-start overflow-hidden">
                     {(pdf || (fileId && fileId !== "manual")) ? (
-                      <div className="flex items-center justify-center lg:justify-start gap-2 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm shadow-inner w-full lg:w-fit">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        <span className="font-medium truncate max-w-[200px] sm:max-w-[300px]">
+                      <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm min-w-0 max-w-full">
+                        <svg className="shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        
+                        {/* จุดสำคัญ: ใช้ truncate เพื่อตัดคำเป็น ... และใส่ min-w-0 เพื่อให้ตัดคำได้จริง */}
+                        <span className="font-medium truncate block">
                           {pdf ? pdf.name : (historyItems.find(i => i.id === currentHistoryId)?.fileName || fileId)}
                         </span>
                       </div>
@@ -1219,55 +1214,49 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-3 w-full lg:w-auto">
+                  {/* --- ส่วนขวา: ปุ่มเครื่องมือ (ปรับปรุง: เพิ่ม shrink-0 เพื่อห้ามปุ่มเล็กลง) --- */}
+                  <div className="w-full lg:w-auto flex flex-wrap items-center justify-center lg:justify-end gap-2 sm:gap-3 shrink-0">
                     
                     <button 
                       onClick={summarize} 
                       disabled={loading} 
-                      className="group relative flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:-translate-y-0.5"
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-sm flex-1 sm:flex-none whitespace-nowrap"
                     >
-                      <div className="absolute inset-0 border-t border-white/20 rounded-xl pointer-events-none"></div>
-                      <span>สรุปเนื้อหา</span>
+                      สรุปเนื้อหา
                     </button>
                     
                     {currentUser && (
                       <button 
                         onClick={() => setNoteOpen(true)} 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 backdrop-blur-md hover:bg-zinc-700/80 hover:text-white hover:border-zinc-500 hover:shadow-lg hover:-translate-y-0.5"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-zinc-800/60 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700 hover:text-white flex-1 sm:flex-none whitespace-nowrap"
                       >
                          โน้ต
                       </button>
                     )}
 
-                    <div className="hidden sm:block w-px h-8 bg-zinc-800 mx-1"></div>
+                    <div className="hidden sm:block w-px h-6 bg-zinc-700/50 mx-1 shrink-0"></div>
 
-                    <div className="flex gap-3 w-full sm:w-auto mt-1 sm:mt-0">
-                      
-                      <button 
-                        onClick={() => addMoreQuiz("mcq")} 
-                        disabled={loading || mcqCount >= MAX_QUESTIONS} 
-                        className="group flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-sky-900/20 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:border-sky-400 hover:text-sky-300 hover:shadow-[0_0_15px_rgba(14,165,233,0.2)] hover:-translate-y-0.5"
-                      >
-                        <span>+ แบบทดสอบปรนัย</span>
-                        <span className="flex items-center justify-center bg-sky-950/60 px-2 py-0.5 rounded-md text-xs border border-sky-500/20 group-hover:border-sky-400/40 transition-colors">
-                          {mcqCount}/15
-                        </span>
-                      </button>
+                    <button 
+                      onClick={() => addMoreQuiz("mcq")} 
+                      disabled={loading || mcqCount >= MAX_QUESTIONS} 
+                      className="group flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-sky-900/20 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 flex-1 sm:flex-none whitespace-nowrap"
+                    >
+                      <span>+ ปรนัย</span>
+                      <span className="bg-sky-950/60 px-1.5 py-0.5 rounded text-[11px] border border-sky-500/20 group-hover:border-sky-400/40">{mcqCount}/15</span>
+                    </button>
 
-                      <button 
-                        onClick={() => addMoreQuiz("tf")} 
-                        disabled={loading || tfCount >= MAX_QUESTIONS} 
-                        className="group flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-emerald-900/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-400 hover:text-emerald-300 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:-translate-y-0.5"
-                      >
-                        <span>+ แบบทดสอบถูกผิด</span>
-                        <span className="flex items-center justify-center bg-emerald-950/60 px-2 py-0.5 rounded-md text-xs border border-emerald-500/20 group-hover:border-emerald-400/40 transition-colors">
-                          {tfCount}/15
-                        </span>
-                      </button>
+                    <button 
+                      onClick={() => addMoreQuiz("tf")} 
+                      disabled={loading || tfCount >= MAX_QUESTIONS} 
+                      className="group flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-emerald-900/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 flex-1 sm:flex-none whitespace-nowrap"
+                    >
+                      <span>+ ถูกผิด</span>
+                      <span className="bg-emerald-950/60 px-1.5 py-0.5 rounded text-[11px] border border-emerald-500/20 group-hover:border-emerald-400/40">{tfCount}/15</span>
+                    </button>
 
-                    </div>
                   </div>
                 </div>
+
               </div>
 
               <div>
@@ -1774,7 +1763,7 @@ export default function Home() {
         <div className="space-y-3">
           <div className="flex gap-2">
             <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualSetId ?? ""} onChange={(e) => setManualSetId(e.target.value ? Number(e.target.value) : null)}><option value="">เลือกชุดที่จะเพิ่ม…</option>{sets.map((s) => (<option key={s.id} value={s.id}>{s.title} ({s.question_ids.length} ข้อ)</option>))}</select>
-            <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualType} onChange={(e) => setManualType(e.target.value as "mcq" | "tf")}><option value="mcq">MCQ</option><option value="tf">True/False</option></select>
+            <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualType} onChange={(e) => setManualType(e.target.value as "mcq" | "tf")}><option value="mcq">แบบปรนัย</option><option value="tf">แบบถูกผิด</option></select>
           </div>
           <textarea className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" placeholder="พิมพ์คำถาม…" value={manualQ} onChange={(e) => setManualQ(e.target.value)} />
           {manualType === "mcq" ? (<div className="grid grid-cols-1 md:grid-cols-2 gap-2">{manualChoices.map((c, i) => (<input key={i} className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" placeholder={`ช้อยส์ ${idxToLetter[i]}`} value={c} onChange={(e) => { const clone = manualChoices.slice(); clone[i] = e.target.value; setManualChoices(clone); }} />))}<select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualAns} onChange={(e) => setManualAns(e.target.value)}>{idxToLetter.map((l) => (<option key={l} value={l}>{`เฉลย ${l}`}</option>))}</select></div>) : (<div className="flex gap-2"><label className="flex items-center gap-2 text-sm"><input type="radio" name="tfans" value="true" checked={manualAns === "true"} onChange={() => setManualAns("true")} /> จริง (true)</label><label className="flex items-center gap-2 text-sm"><input type="radio" name="tfans" value="false" checked={manualAns === "false"} onChange={() => setManualAns("false")} /> เท็จ (false)</label></div>)}

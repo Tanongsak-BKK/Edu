@@ -1,0 +1,107 @@
+[
+  {
+    "id": 1,
+    "type": "tf",
+    "question": "Firebase provides tools that help streamline app development.",
+    "choices": null,
+    "answer": "true",
+    "explain": "Firebase offers a wide range of tools and services that facilitate and accelerate the app development process.",
+    "topic": ""
+  },
+  {
+    "id": 2,
+    "type": "tf",
+    "question": "Feature-rich applications can be built quickly using Firebase.",
+    "choices": null,
+    "answer": "true",
+    "explain": "Firebase is designed to help developers build feature-rich applications efficiently and quickly.",
+    "topic": ""
+  },
+  {
+    "id": 3,
+    "type": "tf",
+    "question": "Firebase is only known for its real-time database.",
+    "choices": null,
+    "answer": "false",
+    "explain": "Firebase is known for multiple features including authentication, cloud functions, and more, not just its real-time database.",
+    "topic": ""
+  },
+  {
+    "id": 4,
+    "type": "tf",
+    "question": "Flutter cannot be integrated with Firebase.",
+    "choices": null,
+    "answer": "false",
+    "explain": "Flutter can be easily integrated with Firebase to enhance app functionality.",
+    "topic": ""
+  },
+  {
+    "id": 5,
+    "type": "tf",
+    "question": "Firebase must be initialized before using its services in a Flutter application.",
+    "choices": null,
+    "answer": "true",
+    "explain": "Firebase initialization is required to set up the services before they can be used.",
+    "topic": ""
+  },
+  {
+    "id": 6,
+    "type": "mcq",
+    "question": "What is one of the main features of Firebase?",
+    "choices": [
+      "Static website hosting",
+      "Real-time database",
+      "File storage only",
+      "Email marketing"
+    ],
+    "answer": "ข",
+    "explain": "Firebase is known for its real-time database, which allows for data to be synchronized in real-time across clients.",
+    "topic": ""
+  },
+  {
+    "id": 7,
+    "type": "mcq",
+    "question": "Which of the following is important for enhancing user experience in mobile apps?",
+    "choices": [
+      "Intuitive navigation",
+      "Frequent pop-up ads",
+      "Complicated user interfaces",
+      "Long loading times"
+    ],
+    "answer": "ก",
+    "explain": "Intuitive navigation is crucial for enhancing user experience, making it easier for users to interact with the app.",
+    "topic": ""
+  },
+  {
+    "id": 8,
+    "type": "tf",
+    "question": "นิกเนมหล่อมากไหม",
+    "choices": null,
+    "answer": "true",
+    "explain": "หล่อมาก",
+    "topic": ""
+  },
+  {
+    "id": 9,
+    "type": "tf",
+    "question": "นิกเนมโหดมากป่าว",
+    "choices": null,
+    "answer": "true",
+    "explain": "โหดมาก",
+    "topic": ""
+  },
+  {
+    "id": 10,
+    "type": "mcq",
+    "question": "เทคโนโลยีแผงโซลาร์เซลล์ที่ได้รับความนิยมในปัจจุบันคืออะไร?",
+    "choices": [
+      "Polycrystalline",
+      "Monocrystalline",
+      "TOPCon",
+      "ทั้ง ข และ ค"
+    ],
+    "answer": "ง",
+    "explain": "เทคโนโลยี Monocrystalline และ TOPCon ได้รับความนิยมเนื่องจากมีค่าประสิทธิภาพสูง.",
+    "topic": ""
+  }
+]
