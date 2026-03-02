@@ -1,0 +1,9 @@
+# ไฟล์ความลับ (ห้ามเอาขึ้น Git เด็ดขาด)
+.env
+service-account.json
+
+# โฟลเดอร์ระบบและ Dependencies ที่ไม่จำเป็นต้องอัปโหลด (ทำให้ Git เบาลง)
+node_modules/
+venv/
+.venv/
+__pycache__/
