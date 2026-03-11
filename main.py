@@ -1,5 +1,3 @@
-# main.py  (EduGen API — Clean Version)
-
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -44,12 +42,12 @@ if firebase_admin is not None and firestore is not None:
                 {"projectId": FIREBASE_PROJECT_ID} if FIREBASE_PROJECT_ID else None,
             )
         _db = firestore.Client(project=FIREBASE_PROJECT_ID) if FIREBASE_PROJECT_ID else firestore.Client()
-        print("✅ Firebase Admin / Firestore initialized")
+        print("Firebase Admin / Firestore initialized")
     except Exception as e:
         print(f"⚠️ Firebase init failed: {e}")
         _db = None
 else:
-    print("⚠️ Firebase Admin / Firestore not available (libraries not installed?)")
+    print("Firebase Admin / Firestore not available (libraries not installed?)")
 
 def _firestore_db():
     return _db

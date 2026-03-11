@@ -833,7 +833,7 @@ export default function Home() {
 
         const payload = {
           file_name: nameToSend,
-          overview: overview,
+          overview: overview || "",
           key_points: keyPoints,
           sections: sections,
           data_points: dataPoints,
@@ -971,7 +971,7 @@ export default function Home() {
 
       const payload = {
         file_name: nameToSend,
-        overview: overview || "สรุปเนื้อหา",
+        overview: overview || "",
         key_points: keyPoints,
         sections: sections,
         data_points: dataPoints,
@@ -1308,7 +1308,7 @@ export default function Home() {
               {(overview || keyPoints.length > 0 || sections.length > 0) && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-10">
                   
-                  {overview && (
+                  {overview && overview.trim().length > 0 && (
                     <div className="relative group">
                       <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                       <div className="relative rounded-2xl bg-zinc-950 border border-zinc-800 p-8 shadow-2xl">

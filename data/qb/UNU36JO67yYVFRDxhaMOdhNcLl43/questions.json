@@ -279,5 +279,46 @@
     "answer": "ก",
     "explain": "CART uses a tree structure to segment the feature space into regions for making predictions, applicable for both classification and regression tasks.",
     "topic": ""
+  },
+  {
+    "id": 25,
+    "type": "tf",
+    "question": "แบตเตอรี่ในระบบอิสระ (Off-Grid System) ใช้สำหรับเก็บพลังงานเพื่อใช้งานในเวลากลางคืน.",
+    "choices": null,
+    "answer": "true",
+    "explain": "แบตเตอรี่ในระบบอิสระมีหน้าที่เก็บพลังงานที่ผลิตได้ในระหว่างวันเพื่อใช้ในเวลากลางคืน.",
+    "topic": ""
+  },
+  {
+    "id": 26,
+    "type": "tf",
+    "question": "ระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์มีเพียงประเภทเดียวคือระบบอิสระ (Off-Grid System).",
+    "choices": null,
+    "answer": "false",
+    "explain": "ระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์แบ่งออกเป็น 2 ประเภทหลัก คือ ระบบอิสระ (Off-Grid System) และระบบเชื่อมต่อกับสายส่ง (On-Grid System).",
+    "topic": ""
+  },
+  {
+    "id": 27,
+    "type": "tf",
+    "question": "เอฟเฟกต์โฟโตโวลตาอิก (Photovoltaic Effect) คือกระบวนการที่แปลงพลังงานแสงให้เป็นพลังงานไฟฟ้าโดยตรง.",
+    "choices": null,
+    "answer": "true",
+    "explain": "เอฟเฟกต์โฟโตโวลตาอิกเป็นกระบวนการที่เซลล์แสงอาทิตย์ใช้ในการแปลงพลังงานแสงเป็นพลังงานไฟฟ้า.",
+    "topic": ""
+  },
+  {
+    "id": 28,
+    "type": "mcq",
+    "question": "การใช้พลังงานแสงอาทิตย์ช่วยลดการพึ่งพาเชื้อเพลิงประเภทใด?",
+    "choices": [
+      "พลังงานความร้อน",
+      "เชื้อเพลิงฟอสซิล",
+      "พลังงานน้ำ",
+      "พลังงานลม"
+    ],
+    "answer": "ข",
+    "explain": "การใช้พลังงานแสงอาทิตย์ช่วยลดการพึ่งพาเชื้อเพลิงฟอสซิล เช่น ถ่านหินและน้ำมัน.",
+    "topic": ""
   }
 ]
