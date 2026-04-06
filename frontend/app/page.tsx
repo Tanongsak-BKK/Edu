@@ -1209,7 +1209,7 @@ export default function Home() {
                     ) : (
                       <div className="text-zinc-500 text-sm font-medium px-2 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-zinc-600"></span>
-                        โหมดข้อความ (Manual)
+                        โmovedข้อความ (Manual)
                       </div>
                     )}
                   </div>

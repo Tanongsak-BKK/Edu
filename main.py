@@ -12,16 +12,20 @@ import os, re, json
 
 # ---------- Bootstrapping ----------
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")  # optional
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 
 if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY is missing. Please set it in .env")
+    raise RuntimeError("ไม่มี Key ของ Openai กรุณาตรวจที่ไฟล์ .env")
 
-client = OpenAI(api_key=OPENAI_API_KEY, project=OPENAI_PROJECT_ID) if OPENAI_PROJECT_ID else OpenAI(api_key=OPENAI_API_KEY)
+# สร้างตัวแทน (Client) เพื่อใช้เชื่อมต่อและสั่งงาน AI (GPT-4o-mini) ตลอดทั้งโปรแกรม
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 # ---------- Firebase Admin / Firestore ----------
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
+
+
+# ถ้าไม่ได้ติดตั้ง Library ไว้ ให้เซตค่าเป็น None เพื่อไม่ให้โปรแกรมพัง
 try:
     import firebase_admin
     from firebase_admin import credentials, auth as fb_auth
@@ -32,51 +36,67 @@ except Exception:
     firestore = None
 
 _db = None
-if firebase_admin is not None and firestore is not None:
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "./service-account.json")
+
+
+# ยืนยันตัวตนเพื่อเชื่อมต่อฐานข้อมูล
+if firebase_admin is not None and firestore is not None: 
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "./service-account.json") 
     try:
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(
+        if not firebase_admin._apps: 
+            cred = credentials.Certificate(cred_path) 
+            firebase_admin.initialize_app( 
                 cred,
                 {"projectId": FIREBASE_PROJECT_ID} if FIREBASE_PROJECT_ID else None,
             )
         _db = firestore.Client(project=FIREBASE_PROJECT_ID) if FIREBASE_PROJECT_ID else firestore.Client()
-        print("Firebase Admin / Firestore initialized")
-    except Exception as e:
-        print(f"⚠️ Firebase init failed: {e}")
-        _db = None
+        print("Firebase Admin / Firestore initialized") 
+    except Exception as e: 
+        print(f"Firebase init failed: {e}") 
+        _db = None 
 else:
     print("Firebase Admin / Firestore not available (libraries not installed?)")
 
+
+#ฟังก์ชันคืนค่า _db เพื่อให้ส่วนอื่นๆเรียกใช้ฐานข้อมูล
 def _firestore_db():
     return _db
 
+#ฟังก์ชันนี้ บันทึกประวัติกิจกรรม (User Log) และ จัดเก็บผลลัพธ์จาก AI (Summary/Quiz) ลงในฐานข้อมูล Firestore แบบแยกรายบุคคล
 def _log_user_event(user_id: str, collection: str, data: Dict[str, Any]) -> None:
+
     db = _firestore_db()
     if db is None or firestore is None:
         return
+
     try:
         db.collection("users").document(user_id).collection(collection).add(
             {
-                **data,
+                **data, #เอาข้อมูลใน Dict มาแสดงตรงนี้ (ชื่อไฟล์, เนื้อหา, ฯลฯ)
                 "createdAt": firestore.SERVER_TIMESTAMP,
             }
         )
     except Exception as e:
         print(f"[history-log error] {e}")
 
+#ระบุชื่อระบบและเวอร์ชัน
 app = FastAPI(title="EduGen API", version="3.8.5")
 
-# ---------- CORS ----------
+
+# ---------- Cross-Origin Resource Sharing ----------
+
+#กำหนดการอนุญาตที่จะให้เข้าถึงหน้าเว็บของเรา
 _frontend_origins = os.getenv("FRONTEND_ORIGINS", "").strip()
 if _frontend_origins:
     allow_origins = [o.strip() for o in _frontend_origins.split(",") if o.strip()]
 else:
     allow_origins = ["http://127.0.0.1:3000"]
 
+
+#อนุญาตแบบกรณี พิเศษ ถ้ามีเข้ามาแบบ localhost หรือ 127.0.0.1 ไม่ว่าจะพอร์ตไหน จะอนุญาตหมด
 allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
+
+#การอนุญาต เพื่อเปิดให้ Frontend สามารถสื่อสารกับ Backend ได้ โดยกำหนดให้รองรับทุก HTTP Methods
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
@@ -87,42 +107,41 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-# ---------- Config ----------
-NEAR_DUP_THRESHOLD = 0.78
-CTX_CHAR_LIMIT = 15000
-EXCLUDE_LIST_LIMIT = 30
+# ---------- Config ---------- ประกาศตัวแปรไว้
+NEAR_DUP_THRESHOLD = 0.78  #กำหนด THRESHOLD แบ่งตอนเอาไปเทียบกับข้อสอบที่เจนมาเพื่อกรองคำซ้ำ
+CTX_CHAR_LIMIT = 15000 #กำหนดตัวอักษรที่จะส่งไปไม่เกิน 15000 ตัวอักษร
+EXCLUDE_LIST_LIMIT = 30 #กำหนดให้จำข้อสอบได้ 30 ข้อ 15/15
 
-# ---------- Health ----------
+
+# ---------- Health ---------- ช่วยเช็คเฉยๆว่า Backend ทำงานไหม
 @app.get("/health")
 def health():
     return {"ok": True, "version": "3.8.5"}
 
-# ---------- Auth helpers ----------
+
+# ---------- Auth helpers ---------- ช่วย ตรวจสอบว่าคนที่เรียก API นี้คือใคร และมีสิทธิ์หรือป่าว
 def _require_user_id(req: Request) -> str:
     authz = (req.headers.get("Authorization") or "").strip()
-    if authz.startswith("Bearer "):
-        token = authz.split(" ", 1)[1].strip()
+
+    if authz.startswith("Bearer "): #ex Bearer xxxx
+        token = authz.split(" ", 1)[1].strip() # ตัด Bearer ทิ้ง  เอา xxxx
         if not token:
             raise HTTPException(401, "Empty auth token")
         if fb_auth is None:
             raise HTTPException(500, "Firebase auth not configured on server")
         try:
-            decoded = fb_auth.verify_id_token(token)
-            uid = (decoded.get("uid") or "").strip()
+            decoded = fb_auth.verify_id_token(token)  # ส่ง Token ให้ Firebase ตรวจสอบ
+            uid = (decoded.get("uid") or "").strip() # ถ้าถูก Firebase จะคืน uid กลับมา
             if not uid:
                 raise HTTPException(401, "Invalid auth token (no uid)")
             return uid
         except Exception:
             raise HTTPException(401, "Invalid or expired auth token")
 
-    uid = (req.headers.get("X-User-Id") or "").strip()
-    if not uid:
-        raise HTTPException(401, "Missing Authorization Bearer token or X-User-Id header")
-    if len(uid) > 128:
-        raise HTTPException(400, "User id too long")
-    return uid
+    raise HTTPException(401, "Missing Authorization Bearer token")
 
-# ---------- Minimal Notes Config ----------
+
+# ---------- Minimal Notes Config ---------- ส่วนนี้เดี่ยวกลับมาแก้ ตอนนี้ Note ยังเก็บแบบ Local อยู่ เดี่ยวค่อยมาแก้ให้มันเก็บใน Firebase 
 NOTES_ROOT = os.path.join(os.getcwd(), "data", "notes")
 os.makedirs(NOTES_ROOT, exist_ok=True)
 
@@ -133,113 +152,183 @@ def _note_path(user_id: str, file_id: str) -> str:
     os.makedirs(folder, exist_ok=True)
     return os.path.join(folder, f"{safe_fid}.json")
 
-# ---------- Utils ----------
-def _sentences(text: str) -> List[str]:
-    s = re.split(r"[。.!?]\s+|[\n\r]+", (text or "").strip())
-    return [x.strip() for x in s if x.strip()]
 
+# ---------- Utils ---------- เตรียมข้อมูลเพื่อส่งต่อไปให้ Ai 
+
+#ตัดข้อความยาวๆเพื่อเป็นประโยคสั่นๆ ex "นิกซ่า. น่ารัก" กลายเป็น ["นิกซ่า", "น่ารัก"]
+def _sentences(text: str) -> List[str]: 
+    s = re.split(r"[。.!?]\s+|[\n\r]+", (text or "").strip()) #ตัดคำ เมื่อเจอ  。.!?  เว้นวรรค และ การขึ้่นบรรทัดใหม่
+    return [x.strip() for x in s if x.strip()] #คืนค่าทั้งหมดโดยตัดพวก ประโยคที่ไม่มีข้อความ
+
+#แทนที่ Enter และ Space ถ้ามันมากเกินเ
 def _clean_text(text: str) -> str:
-    text = re.sub(r"\n{2,}", "\n\n", text or "")
-    text = re.sub(r"[ ]{2,}", " ", text)
-    return text.strip()
+    text = re.sub(r"\n{2,}", "\n\n", text or "") #เมื่อเจอ Enter มากกว่า 2 จะแทนค่ามันให้เป็น 2 Enter
+    text = re.sub(r"[ ]{2,}", " ", text) #เมื่อเจอ Space มากกว่า 2 จะแทนค่าให้มันเหลือ 1 Space
+    return text.strip() #คืนค่าพร้อมตัด Space หัวท้ายออก
 
+#ตัด ``` ที่ AI ชอบเผล่อเจนให้มาออก
 def _strip_json_fence(s: str) -> str:
-    s = (s or "").strip()
-    if s.startswith("```"):
-        s = re.sub(r"^```(?:json)?", "", s).strip()
-        s = re.sub(r"```$", "", s).strip()
+    s = (s or "").strip() #ถ้า s เป็น none แปลงเป็น "" แล้วตัดหัวท้ายตลอด
+    if s.startswith("```"): #เราจะเช็ตว่าข้อความที่เราได้จาก ai เริ่มด้วย ``` ไหม
+        s = re.sub(r"^```(?:json)?", "", s).strip() # ตัด ``` ออกพร้อมคำว่า JSON 
+        s = re.sub(r"```$", "", s).strip() #ตัด ``` ช่วงท้ายออก
     return s
 
-def _safe_json_loads(s: str, fallback: Union[dict, list, None] = None):
+#แปลง JSON จาก AI ให้เป็น Python Dict/List กันเว็บพังถ้า AI มันส่งมาเอ๋อๆ
+def _safe_json_loads(s: str, fallback: Union[dict, list, None] = None):#s ค่าที่ได้จาก AI , fallback ค่าสำรอง ถ้าแปลงไม่สำเร็จจะใช้ค่านี้แทน
     try:
-        return json.loads(_strip_json_fence(s))
+        return json.loads(_strip_json_fence(s)) #เอาไปลอก ``` ก่อน
     except Exception:
-        return fallback if fallback is not None else {}
+        return fallback if fallback is not None else {} #ถ้าแปลงไม่ได้ ไปใช้ค่า fallback  ถ้าไม่มี fallback คืนค่า None กลับ {}
 
+#ตัดแบ่งประโยค แล้ว ใส่หมายเลขให้มัน
 def _numbered_sentences(text: str, max_sentences: int = 800):
-    sents = _sentences(text)
-    sents = sents[:max_sentences]
-    return [{"id": i, "text": t} for i, t in enumerate(sents, start=1)]
+    sents = _sentences(text) #ตัดคำออกมา
+    sents = sents[:max_sentences] #กำหนดคำที่ตัดออกมาไม่เกิน 800
+    return [{"id": i, "text": t} for i, t in enumerate(sents, start=1)] #คืนค่าเป็นแบบ Dict แบบใส่เลขให้ เช่น {"id": 1, "text": "นิกเนมหล่อ"}
 
+#ตรวจสอบคำให้ไม่เกิน 45000
 def _truncate_text_chars(text: str, max_chars: int = 45000) -> str:
-    text = text or ""
-    return text if len(text) <= max_chars else text[:max_chars]
+    text = text or "" #ดักกัน Crash ถ้า text ที่รับเข้ามาเป็น None จะให้เป็น ""
+    if len(text) <= max_chars: #ถ้่าไม่เกิน
+        return text  
+    
+    # ถ้าเกิน ให้ตัดเอาแค่ตั้งแต่ตัวแรกจนถึงตัวที่ max_chars
+    else:
+        return text[:max_chars]
 
 # ---------- Near-duplicate helpers ----------
+
+#ตรวจคำเหมือน ตอนเอาไปเจนข้อสอบเพิ่มจะได้คำถามที่ไม่เหมือนกัน
 _STOP = set("คือ ของ และ หรือ ที่ ใน เป็น ได้ มี ใด ใดๆ อะไร อย่างไร ใคร ไหน ข้อใด ต่อไปนี้ มาก น้อย ไม่ ใช่ จาก ตาม เพื่อ เช่น ดังนั้น ดังกล่าว ซึ่ง โดย เพราะ ดังนั้นจึง".split())
 
+#ทำการเปลี่ยนข้อความปกติให้เป็นคำที่สำคัญจริงๆสำหรับการนำไปสร้างข้อสอบ
 def _tokenize(s: str) -> List[str]:
-    return [
-        w for w in re.sub(r"[^\w\s]", " ", (s or "").lower()).replace("ๆ", " ").split()
-        if w and w not in _STOP
-    ]
+    text = (s or "").lower() #จัดการค่าว่างและเปลี่ยนเป็นตัวพิมพ์เล็ก 
+    text = re.sub(r"[^\w\s]", " ", text) #เอาเครื่องหมายออก เอาแค่ตัวหนังสือ (\w) และ Space(\s)
+    text = text.replace("ๆ", " ")# ๆ เปลี่ยนเป็น ช่องว่าง
+    words = text.split() #หั่นข้อความออกเป็นคำๆ โดยใช้ช่องว่าง "นิวเคลียส เซลล์ พืช" เป็น ["นิวเคลียส", "เซลล์", "พืช"]
+    
+    clean_words = []
+    for w in words:
+        if w and (w not in _STOP): #จากคำที่เราได้มา เอาไปเทียบกับ _STOP ว่าซ้ำกันไหม เพื่อเราจะได้คำที่สำคัญจริงๆ
+            clean_words.append(w)
+    return clean_words
 
+#เอาข้อสอบ ใหม่(A) เก่า(B) มาเทียบกันแล้วให้คะแนนความเหมือน
 def _jaccard(a: str, b: str) -> float:
-    A, B = set(_tokenize(a)), set(_tokenize(b))
-    if not A or not B:
+    A, B = set(_tokenize(a)), set(_tokenize(b))  #เอา A B ไป tokenize
+    if not A or not B: #ถ้า A หรือ B มีค่าว่างจะให้ = 0.0
         return 0.0
-    inter = len(A & B)
-    uni = len(A | B)
-    return inter / uni if uni else 0.0
+    inter = len(A & B) #เทียบกันถ้าเหมือนกัน จะ + 1
+    uni = len(A | B) #นับทุกคำส่วนคำซ้ำจะนับให้มันแค่ 1 ตัวเท่านั้น
 
+    if uni == 0:
+        return 0.0
+    
+    similarity_score = inter / uni #ex inter = 2 uni = 10    2/10 = 0.2 
+
+    return similarity_score
+
+#ช่วยดักจับที่ Ai พยายามเลี่ยงคำให้มันไม่เหมือน
 def _dice_bigram(a: str, b: str) -> float:
-    def bi(x: str) -> List[str]:
-        t = re.sub(r"\s+", " ", x).strip()
-        return [t[i : i + 2] for i in range(len(t) - 1)] if len(t) > 1 else []
 
-    A, B = bi(a), bi(b)
+    def bi(x: str) -> List[str]:
+        t = re.sub(r"\s+", " ", x).strip() #ล้างช่องว่างให้เหลือแค่ช่องเดียว
+        result = []
+        if len(t) > 1: #ต้องมีตัวอักษรมากกว่า 1
+            for i in range(len(t) - 1): #วนตั้งแต่ตัวแรกถึงตัวสุดท้าย
+                current_char = t[i] #เก็บตัวปัจบัน
+                next_char = t[i + 1] #เก็บตัวถัดไป
+                pair = current_char + next_char # ตัวปัจบันรวมกับตัวถัดไป
+                result.append(pair) #จับเข้าไปใน Array 
+        return result
+
+    A, B = bi(a), bi(b) 
+
+    #ดักไว้ถ้า Array A และ Array B เป็นค่าว่างจะให้ส่ง 0.0
     if not A or not B:
         return 0.0
+
+    #นับจำนวนคู่ที่ซ้ำกันออกมาเป็น %  
     from collections import Counter
-    CA, CB = Counter(A), Counter(B)
+    CA, CB = Counter(A), Counter(B) #Ex Array A คือ ["นะ", "คะ", "นะ"] , Counter(A) จะได้ {"นะ": 2, "คะ": 1}
+
+    #A v คู่ใหม่ , B คู่เก่า
     inter = 0
     for k, v in CA.items():
-        inter += min(v, CB.get(k, 0))
-    return (2 * inter) / (len(A) + len(B))
+        count_in_B = CB.get(k, 0) #ไปเช็คว่า คู่ของ CA นี้มีอยู่ใน CB หรือป่าว ถ้าไม่มีให้ เป็น 0
 
+        if v < count_in_B: #เช็คจำนวนคู่อักษรใหม่น้อยกว่า คู่อักษรเก่าหรือไม่
+            inter = inter + v
+        else:
+            inter = inter + count_in_B
+
+    return (2 * inter) / (len(A) + len(B)) #len.. คือจำนวนคู่ทั้งหมด
+
+
+#จะเอาเลขที่ได้จาก jaccard และ dice_bigram มาเทียบกันว่าใครมากกว่ากัน แล้วคืนค่าเลขนั้น
 def _similar(a: str, b: str) -> float:
     return max(_jaccard(a, b), _dice_bigram(a, b))
 
+
+#ตัวตัดสินว่าข้อสอบที่ได้ใหม่จะทิ้งหรือไม่ทิ้ง
+#items = ข้อสอบใหม่ , exclude = ข้อสอบเก่า ถ้าผ่านจะคืน ข้อสอบใหม่ 
 def _filter_near_dups(items: List[Dict[str, Any]], exclude: List[str], threshold: float = NEAR_DUP_THRESHOLD) -> List[Dict[str, Any]]:
     kept: List[Dict[str, Any]] = []
-    for q in items:
-        text = str(q.get("question") or "").strip()
-        if not text:
+
+    for q in items: #วนลูปข้อสอบใหม่
+        text = str(q.get("question") or "").strip() #เลือกหยิบเฉพาะ question ออกมาดู
+
+        if not text: #ดักไว้ถ้าไม่มีไปข้อต่อไป
             continue
-        dup = False
-        for e in exclude:
-            if _similar(text, e) >= threshold:
-                dup = True
+        dup = False #สร้างไว้บอกว่ายังไม่เจอข้อซ้ำ
+
+
+        for e in exclude:#วนในข้อสอบเก่าทุกข้อ
+            if _similar(text, e) >= threshold:#เทียบกับข้อสอบใหม่ แล้วเช็คว่ามันมากกว่า threshold ไหม
+                dup = True #ถ้ามากกว่าก็คือเจอข้อคำถามที่มันจะออกแนวซ้ำ
                 break
-        if dup:
+
+        if dup: #ถ้าเจอข้อซ้ำจะไปข้อถัดไป
             continue
-        for e in kept:
+
+        #มันจะเอาข้อสอบใหม่ที่ผ่านมาวนทุกข้อใน kept ก็คือที่ผ่านแล้ว วนดูว่ามันมีซ้ำกันไหม 
+        for e in kept: 
             if _similar(text, str(e.get("question") or "")) >= threshold:
-                dup = True
+                dup = True #กรณี ที่ข้อสอบใหม่ ซ้ำกับ ข้อสอบใหม่ จะบอกว่าเจอข้อซ้ำ
                 break
-        if not dup:
+
+        if not dup: #ถ้าไม่เจอข้อซ้ำเลย มันก็จะเพิ่มข้อๆนั้นลงไปใน kept
             kept.append(q)
+
     return kept
 
-# ---------- Models ----------
+
+# ---------- Data Models ---------- ตรวจสอบข้อมูลที่ผู้ใช้ส่งมา 
+
+#รับเนื้อหาในรูปแบบ Text (String)
 class ContextIn(BaseModel):
-    context: str
+    context: str #เนื้อหาหลักที่เราได้มาจาก PDF 
 
+#แม่แบบตอนสั่งข้อสอบ ว่าจะต้องมีอะไรบ้าง
 class QuizIn(BaseModel):
-    context: str
-    n: int = 5
-    exclude: Optional[List[str]] = None
-    topics: Optional[List[str]] = None
+    context: str #เนื้อหาบทเรียนที่จะเอาออกมาทำข้อสอบ
+    n: int = 5  #จำนวน 5 ข้อ
+    exclude: Optional[List[str]] = None #รายข้อสอบเก่า มีหรือไม่มีก็ได้ (Optional)
+    topics: Optional[List[str]] = None #หัวข้อหลัก มีหรือไม่มีก็ได้ (Optional)
 
+#แม่แบบตอบคำถาม QA โดยเราจะเอาคำตอบที่มีในเนื้อหาไปตอบคำถามเท่านั้น
 class QAIn(BaseModel):
-    context: str
-    question: str
+    context: str #เนื้อหาหลักที่เราจะต้องเอาไปตอบ
+    question: str #คำถามที่ user ถาม
 
+#แม่แบบที่ได้รับสรุปจาก AI แล้ว เพื่อเตรียมเอาไปให้ user ดู
 class SummarizeOut(BaseModel):
-    overview: str
-    key_points: List[str]
-    sections: List[Dict[str, str]]
-    data_points: List[Dict[str, str]]
+    overview: str #บทนำ/ภาพรวม
+    key_points: List[str] #ประเด็นสำคัญ
+    sections: List[Dict[str, str]] #หัวข้อย่อย
+    data_points: List[Dict[str, str]] #ข้อมูลเชิงสถิติ/ตัวเลข
 
 # ---------- Endpoints ----------
 @app.post("/pdf/extract")
