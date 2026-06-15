@@ -1,6 +1,10 @@
 # ไฟล์ความลับ (ห้ามเอาขึ้น Git เด็ดขาด)
 .env
 service-account.json
+frontend/.env.local
+
+# ข้อมูลผู้ใช้ (notes, quiz bank)
+data/
 
 # โฟลเดอร์ระบบและ Dependencies ที่ไม่จำเป็นต้องอัปโหลด (ทำให้ Git เบาลง)
 node_modules/

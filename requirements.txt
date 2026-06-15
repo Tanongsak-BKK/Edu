@@ -1,21 +1,22 @@
 fastapi
 uvicorn[standard]
+gunicorn
 python-multipart
 
-# แก้ไขตรงนี้เพื่อให้รองรับ Pydantic V2 และอ่านไฟล์ .env ได้แม่นยำ
+# Pydantic V2 + .env support
 pydantic
 pydantic-settings
 python-dotenv
 
 openai>=1.0.0
 
-# ส่วนของ Firebase และ Google Cloud (ของเดิมโอเคอยู่แล้ว)
+# Firebase / Google Cloud
 firebase-admin
 google-cloud-firestore
 google-cloud-core
 google-api-core
 
-# ส่วนของ PDF Processing
+# PDF Processing
 pdfplumber
 reportlab
 
