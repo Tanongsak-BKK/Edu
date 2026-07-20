@@ -19,6 +19,7 @@ export type HistorySaveInput = {
   content: string;
   qaHistory: QAPair[];
   manualFallback?: string;
+  documentId: string;
 };
 
 export function resolveHistoryFileName(input: Pick<
@@ -48,6 +49,7 @@ export function buildHistoryPayload(input: HistorySaveInput) {
     score: input.score,
     content: input.content,
     qa_history: input.qaHistory,
+    document_id: input.documentId,
   };
 }
 

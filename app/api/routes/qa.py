@@ -8,4 +8,4 @@ router = APIRouter()
 
 @router.post("")
 def qa(body: QAIn):
-    return QAService.answer(body.context or "", body.question or "")
+    return QAService.answer(body.context or "", body.question or "", document_id=body.document_id)

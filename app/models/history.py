@@ -16,6 +16,7 @@ class QuizHistoryIn(BaseModel):
     score: int
     content: str = ""
     qa_history: List[QAPair] = [] 
+    document_id: str = "" 
 
 class RenameHistoryIn(BaseModel):
     new_name: str

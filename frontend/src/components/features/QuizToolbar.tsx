@@ -1,4 +1,4 @@
-import { MAX_QUESTIONS } from "../../constants/quiz";
+ import { MAX_QUESTIONS } from "../../constants/quiz";
 
 type Props = {
   mcqCount: number;
@@ -6,11 +6,31 @@ type Props = {
   loading: boolean;
   onAddMcq: () => void;
   onAddTf: () => void;
+  difficultyLevel: "easy" | "medium" | "hard" | "mixed";
+  onChangeDifficulty: (level: "easy" | "medium" | "hard" | "mixed") => void;
 };
 
-export function QuizToolbar({ mcqCount, tfCount, loading, onAddMcq, onAddTf }: Props) {
+export function QuizToolbar({ mcqCount, tfCount, loading, onAddMcq, onAddTf, difficultyLevel, onChangeDifficulty }: Props) {
   return (
-    <>
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* Dropdown เลือกระดับความยาก */}
+      <div className="relative group">
+        <select
+          value={difficultyLevel}
+          onChange={(e) => onChangeDifficulty(e.target.value as "easy" | "medium" | "hard" | "mixed")}
+          disabled={loading}
+          className="appearance-none bg-slate-800/50 border border-slate-600/50 text-slate-300 text-sm font-medium py-2.5 pl-4 pr-10 rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all cursor-pointer disabled:opacity-50"
+        >
+          <option value="mixed">ความยาก: อัตโนมัติ (Auto)</option>
+          <option value="easy">ความยาก: ง่าย (Easy)</option>
+          <option value="medium">ความยาก: ปานกลาง (Medium)</option>
+          <option value="hard">ความยาก: ยาก (Hard)</option>
+        </select>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+      </div>
+
       <button
         onClick={onAddMcq}
         disabled={loading || mcqCount >= MAX_QUESTIONS}
@@ -31,6 +51,6 @@ export function QuizToolbar({ mcqCount, tfCount, loading, onAddMcq, onAddTf }: P
           {tfCount}/{MAX_QUESTIONS}
         </span>
       </button>
-    </>
+    </div>
   );
 }

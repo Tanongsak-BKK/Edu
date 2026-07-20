@@ -19,25 +19,33 @@ import { useTypewriter } from "../src/hooks/useTypewriter";
 import { useQuiz } from "../src/hooks/useQuiz";
 import { useBank } from "../src/hooks/useBank";
 import { useQA } from "../src/hooks/useQA";
-import { AuthModal } from "../src/components/features/AuthModal";
+import { useRouter } from "next/navigation";
 import { SummarySection } from "../src/components/features/SummarySection";
 import { PdfUploader } from "../src/components/features/PdfUploader";
 import { QASection } from "../src/components/features/QASection";
 import { QuizSection } from "../src/components/features/QuizSection";
 import { QuizToolbar } from "../src/components/features/QuizToolbar";
 import { BankPanel } from "../src/components/features/BankPanel";
+import { SystemSidebar } from "../src/components/layout/SystemSidebar";
+import { DashboardSection } from "../src/components/features/DashboardSection";
+import { SubjectsSection } from "../src/components/features/SubjectsSection";
+import { QuizBankSection } from "../src/components/features/QuizBankSection";
+import { ReportsSection } from "../src/components/features/ReportsSection";
 /* ---------- Page ---------- */
 export default function Home() {
+  const router = useRouter();
+
   // -------- Auth / Notes --------
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [demoUid, setDemoUid] = useState("demo-user");
   const authHeader = useMemo(() => buildAuthHeaders(authToken, demoUid), [authToken, demoUid]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
-          
+
   // --- UI States ---
   const [isLanding, setIsLanding] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(true);
+  const [activeSection, setActiveSection] = useState('dashboard');
 
   // State สำหรับ Animation เมาส์
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -111,7 +119,7 @@ export default function Home() {
     } catch { alert("เปลี่ยนชื่อไม่สำเร็จ"); }
   };
 
-  
+
   const handleLogout = async () => { try { await signOut(auth); } catch (err) { console.error(err); } };
 
   const [fileId, setFileId] = useState<string>("manual");
@@ -159,6 +167,25 @@ export default function Home() {
   const [text, setText] = useState("");
   const [pdf, setPdf] = useState<File | null>(null);
   const [pdfText, setPdfText] = useState("");
+  const [documentId, setDocumentId] = useState("");
+  const [pdfExists, setPdfExists] = useState(false);
+
+  useEffect(() => {
+    if (!documentId) {
+      setPdfExists(false);
+      return;
+    }
+    const checkPdf = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/static/pdfs/${documentId}.pdf`, { method: "HEAD" });
+        setPdfExists(res.status === 200);
+      } catch (e) {
+        setPdfExists(false);
+      }
+    };
+    checkPdf();
+  }, [documentId]);
+
   const [overview, setOverview] = useState("");
   const [keyPoints, setKeyPoints] = useState<string[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -171,11 +198,11 @@ export default function Home() {
     return manualInput || hiddenContext;
   }, [text, pdfText, hiddenContext]);
 
-  const quiz = useQuiz(context);
+  const quiz = useQuiz(context, documentId);
   const bank = useBank(authHeader);
   const qa = useQA();
 
-  const { resetQuiz, restoreFromHistory, questions, answers, score, lockedCount, countByType, handleAnswerChange, isOverallSubmitted, isAllAnswered, ensureTopics, addMoreQuiz, submitQuiz } = quiz;
+  const { resetQuiz, restoreFromHistory, questions, answers, score, lockedCount, countByType, handleAnswerChange, isOverallSubmitted, isAllAnswered, ensureTopics, addMoreQuiz, submitQuiz, difficultyLevel, setDifficultyLevel } = quiz;
   const { resetQA, setQaHistory, qaHistory, qaInput, setQaInput, askQA } = qa;
 
   const handleNewSession = useCallback(() => {
@@ -184,6 +211,7 @@ export default function Home() {
     setText("");
     setPdf(null);
     setPdfText("");
+    setDocumentId("");
     setOverview("");
     setKeyPoints([]);
     setSections([]);
@@ -207,6 +235,7 @@ export default function Home() {
     setText("");
     setPdf(null);
     setPdfText("");
+    setDocumentId(item.document_id || "");
     setQaHistory(item.qa_history || []);
   }, [restoreFromHistory, setQaHistory]);
 
@@ -232,13 +261,14 @@ export default function Home() {
       const fd = new FormData(); fd.append("pdf", file);
       const raw = await apiFetch<unknown>("/pdf/extract", { method: "POST", body: fd });
       const json = parseApi(PdfExtractSchema, raw, "pdf extract");
-      setPdfText(json.text);
+      setPdfText(""); // Do not keep large text in memory/state anymore
+      setDocumentId(json.document_id || "");
       resetQuiz();
       await ensureTopics();
-    } catch (e) { 
-      setError(e instanceof Error ? e.message : String(e)); 
-    } finally { 
-      setLoading(false); 
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
       setLoadingText(""); // 🟢 ปิด Loading Overlay
     }
   };
@@ -282,6 +312,7 @@ export default function Home() {
       content: context,
       qaHistory: overrides.qaHistory ?? qaHistory,
       manualFallback: overrides.manualFallback,
+      documentId: documentId,
     });
     const saved = await saveHistory.mutateAsync({ currentHistoryId, payload });
     if (saved?.id) {
@@ -305,6 +336,7 @@ export default function Home() {
         overview, keyPoints, sections, dataPoints,
         questions: newQuestions, answers: answers, score: -1,
         content: context, qaHistory: qaHistory,
+        documentId: documentId,
       });
       await saveHistory.mutateAsync({ currentHistoryId, payload });
       updateLocalHistoryItem({
@@ -328,7 +360,7 @@ export default function Home() {
   }, [addMoreQuiz, persistQuizUpdate]);
 
   const handleAskQA = useCallback(() => {
-    askQA(context, {
+    askQA(context, documentId, {
       setError,
       setLoading,
       onAnswered: async (newHistory) => {
@@ -340,6 +372,7 @@ export default function Home() {
             questions: questions, answers: answers,
             score: score !== null ? score : -1,
             content: context, qaHistory: newHistory,
+            documentId: documentId,
           });
           await saveHistory.mutateAsync({ currentHistoryId, payload });
           updateLocalHistoryItem({ qa_history: newHistory, answers: answers });
@@ -348,7 +381,7 @@ export default function Home() {
         }
       },
     });
-  }, [askQA, context, currentUser, currentHistoryId, pdf, historyItems, fileId, overview, keyPoints, sections, dataPoints, questions, answers, score, saveHistory, persistSessionHistory, updateLocalHistoryItem]);
+  }, [askQA, context, documentId, currentUser, currentHistoryId, pdf, historyItems, fileId, overview, keyPoints, sections, dataPoints, questions, answers, score, saveHistory, persistSessionHistory, updateLocalHistoryItem]);
 
   const handleSubmitQuiz = useCallback(() => {
     submitQuiz(async (correct) => {
@@ -360,6 +393,7 @@ export default function Home() {
           questions: questions, answers: answers,
           score: correct, content: context, qaHistory: qaHistory,
           manualFallback: "เนื้อหาพิมพ์เอง",
+          documentId: documentId,
         });
         await saveHistory.mutateAsync({ currentHistoryId, payload });
         updateLocalHistoryItem({
@@ -382,8 +416,8 @@ export default function Home() {
 
   const summarize = async () => {
     setIsLanding(false);
-    if (!context) return;
-    if (!canUseProtectedApi(!!currentUser)) { setAuthOpen(true); return; }
+    if (!context && !documentId) return;
+    if (!canUseProtectedApi(!!currentUser)) { router.push('/login'); return; }
     if (!pdf) { setFileId("manual"); firstLoadRef.current = true; await loadNote("manual"); }
 
     const isUpdating = !!currentHistoryId;
@@ -409,7 +443,7 @@ export default function Home() {
       const raw = await apiFetch<unknown>("/summarize", {
         method: "POST",
         auth: authHeader,
-        json: { context },
+        json: { context, document_id: documentId },
       });
       const data = parseApi(SummarizeResponseSchema, raw, "summarize");
       setOverview(typeof data.overview === "string" ? data.overview : "");
@@ -433,6 +467,7 @@ export default function Home() {
           score: isUpdating ? (prevScore ?? -1) : -1,
           content: context,
           qaHistory: qaHistory,
+          documentId: documentId,
         });
         if (currentHistoryId) {
           await saveHistory.mutateAsync({ currentHistoryId, payload });
@@ -446,10 +481,10 @@ export default function Home() {
           }
         }
       }
-    } catch (e) { 
-      setError(e instanceof Error ? e.message : String(e)); 
-    } finally { 
-      setLoading(false); 
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
       setLoadingText(""); // 🟢 ปิด Loading Overlay
     }
   };
@@ -460,8 +495,22 @@ export default function Home() {
   useEffect(() => { firstLoadRef.current = true; loadNote(fileId); }, [fileId, loadNote]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans" onMouseMove={handleMouseMove}>
-      <style jsx>{`
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans relative overflow-x-hidden" onMouseMove={handleMouseMove}>
+      <SystemSidebar
+        isOpen={isSystemMenuOpen}
+        onToggle={() => setIsSystemMenuOpen(!isSystemMenuOpen)}
+        activeSection={activeSection}
+        onSelectSection={setActiveSection}
+      />
+      {/* Backdrop for mobile SystemSidebar */}
+      {isSystemMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsSystemMenuOpen(false)}
+        />
+      )}
+      <div className="flex-1 flex flex-col min-w-0 w-full relative">
+        <style jsx>{`
         @keyframes drift {
           0% { background-position: 0 0; }
           100% { background-position: 40px 40px; }
@@ -471,273 +520,340 @@ export default function Home() {
         }
       `}</style>
 
-      <header className="border-b border-zinc-800 bg-zinc-950/85 backdrop-blur-md sticky top-0 z-50 shrink-0">
-        <div className="mx-auto max-w-full px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <header className="border-b border-slate-200 bg-slate-50/85 backdrop-blur-md sticky top-0 z-50 shrink-0">
+          <div className="mx-auto max-w-full px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
 
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
-              title="เปิด/ปิดแถบประวัติ"
-              style={{ display: currentUser ? 'block' : 'none' }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-            </button>
-
-            <h1
-              onClick={handleNewSession}
-              className="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition"
-            >
-              EduGen
-            </h1>
-          </div>
-
-
-          <div className="flex items-center gap-3">
-            {/* 🟢 แสดงคะแนน */}
-            {!isLanding && isOverallSubmitted && (<Label>คะแนน: <b className="text-emerald-400">{score}</b></Label>)}
-
-            {/* 🟢 ปุ่ม ออก (Logout) และ เข้าสู่ระบบ (Login) ให้สวยงามขึ้น */}
-            {currentUser ? (
-              <div className="flex items-center gap-3 pr-2 sm:border-r border-zinc-800">
-                <span className="hidden sm:inline max-w-[150px] truncate text-xs font-medium text-zinc-400">
-                  {currentUser.email}
-                </span>
-                <button 
-                  onClick={handleLogout} 
-                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800/40 border border-zinc-700/50 text-zinc-300 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all text-sm font-medium"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-0.5 transition-transform"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                  ออก
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => { setAuthOpen(true); }} 
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-all text-sm font-medium"
+              <button
+                onClick={() => setIsSystemMenuOpen(!isSystemMenuOpen)}
+                className={`p-2 rounded-lg transition-colors ${isSystemMenuOpen ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'}`}
+                title="เปิด/ปิด เมนูระบบ"
               >
-                เข้าสู่ระบบ
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               </button>
-            )}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                title="เปิด/ปิดแถบประวัติ"
+                style={{ display: currentUser ? 'block' : 'none' }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </button>
 
-            {/* ปุ่มคลัง และ แชทใหม่ */}
-            {currentUser && <PrimaryBtn onClick={() => bank.openLibrary()} className="bg-zinc-800 hover:bg-zinc-700 text-sm">คลัง</PrimaryBtn>}
-
-            {!isLanding && currentUser && (
-              <PrimaryBtn onClick={handleNewSession} className="bg-emerald-600 hover:bg-emerald-500 text-sm">
-                แชทใหม่
-              </PrimaryBtn>
-            )}
-          </div>
-
-
-        </div>
-      </header>
-
-      <div className="flex flex-1 w-full h-[calc(100vh-73px)] overflow-hidden relative">
-
-        {currentUser && (
-          <aside
-            className={`
-              border-r border-zinc-800 bg-zinc-950/50 flex-shrink-0 transition-all duration-300 ease-in-out relative z-20
-              ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full opacity-0 overflow-hidden'}
-            `}
-          >
-            <div className="h-full overflow-hidden w-72">
-              <HistorySidebar
-                items={historyItems}
-                onSelect={loadFromHistory}
-                onDelete={deleteHistory}
-                onRename={renameHistory}
-                activeId={currentHistoryId}
-              />
+              <h1
+                onClick={handleNewSession}
+                className="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition"
+              >
+                EduGen
+              </h1>
             </div>
-          </aside>
-        )}
 
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto transition-all duration-500 relative z-10">
 
-          {isLanding ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-500 relative overflow-hidden">
+            <div className="flex items-center gap-3">
+              {/* 🟢 แสดงคะแนน */}
+              {!isLanding && isOverallSubmitted && (<Label>คะแนน: <b className="text-emerald-400">{score}</b></Label>)}
 
-              <div
-                className="pointer-events-none fixed inset-0 z-0 animate-grid"
-                style={{
-                  backgroundImage: `
+              {/* 🟢 ปุ่ม ออก (Logout) และ เข้าสู่ระบบ (Login) ให้สวยงามขึ้น */}
+              {currentUser ? (
+                <div className="flex items-center gap-3 pr-2 sm:border-r border-slate-200">
+                  <span className="hidden sm:inline max-w-[150px] truncate text-xs font-medium text-slate-500">
+                    {currentUser.email}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/40 border border-slate-300/50 text-slate-600 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all text-sm font-medium"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-0.5 transition-transform"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    ออก
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => router.push('/login')}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-all text-sm font-medium"
+                >
+                  เข้าสู่ระบบ
+                </button>
+              )}
+
+              {/* ปุ่มคลัง และ แชทใหม่ */}
+              {currentUser && <PrimaryBtn onClick={() => bank.openLibrary()} className="bg-slate-100 hover:bg-slate-200 text-sm">คลัง</PrimaryBtn>}
+
+              {!isLanding && currentUser && (
+                <PrimaryBtn onClick={handleNewSession} className="bg-emerald-600 hover:bg-emerald-500 text-sm">
+                  แชทใหม่
+                </PrimaryBtn>
+              )}
+            </div>
+
+
+          </div>
+        </header>
+
+        <div className="flex flex-1 w-full h-[calc(100vh-73px)] overflow-hidden relative">
+
+          {currentUser && (
+            <aside
+              className={`
+              border-r border-slate-200 bg-slate-50/95 backdrop-blur-md flex-shrink-0 transition-all duration-300 ease-in-out z-40
+              absolute md:relative h-full
+              ${isSidebarOpen ? 'w-72 translate-x-0 shadow-2xl md:shadow-none' : 'w-0 -translate-x-full opacity-0 overflow-hidden'}
+            `}
+            >
+              <div className="h-full overflow-hidden w-72">
+                <HistorySidebar
+                  items={historyItems}
+                  onSelect={loadFromHistory}
+                  onDelete={deleteHistory}
+                  onRename={renameHistory}
+                  activeId={currentHistoryId}
+                />
+              </div>
+            </aside>
+          )}
+
+          <main className="flex-1 flex flex-col min-w-0 overflow-y-auto transition-all duration-500 relative z-10">
+            {activeSection === 'dashboard' ? (
+              <DashboardSection
+                onStart={() => setActiveSection('workspace')}
+                historyItems={historyItems}
+                onSelectHistory={(item) => {
+                  loadFromHistory(item);
+                  setActiveSection('workspace');
+                }}
+              />
+            ) : activeSection === 'workspace' ? (
+              <>
+                {isLanding ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-500 relative overflow-hidden">
+
+                    <div
+                      className="pointer-events-none fixed inset-0 z-0 animate-grid"
+                      style={{
+                        backgroundImage: `
                     radial-gradient(600px at ${mousePosition.x}px ${mousePosition.y}px, rgba(29, 78, 216, 0.15), transparent 80%),
                     linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
                     linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
                   `,
-                  backgroundSize: '40px 40px, 40px 40px, 40px 40px'
-                }}
-              />
-
-              <div className="relative z-10 mb-8 space-y-4">
-                <h1 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent pb-2 drop-shadow-2xl h-20 flex items-center justify-center">
-                  {welcomeText}<span className="animate-pulse text-white">|</span>
-                </h1>
-                <p className="text-zinc-400 text-lg">
-                  อัปโหลด PDF หรือพิมพ์เนื้อหาเพื่อเริ่มสรุปและสร้างข้อสอบได้ทันที
-                </p>
-              </div>
-
-              <div className="w-full max-w-2xl bg-zinc-900/80 border border-zinc-700 rounded-3xl p-4 shadow-2xl backdrop-blur-sm relative z-10 group focus-within:border-indigo-500 transition-colors">
-                <textarea
-                  placeholder="พิมพ์เนื้อหาที่ต้องการสรุป หรือถามคำถาม..."
-                  className="w-full h-32 bg-transparent border-0 outline-none text-lg resize-none placeholder-zinc-500 text-zinc-100"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); summarize(); } }}
-                />
-
-                <div className="flex justify-between items-center mt-2">
-                  <div className="flex gap-2">
-                    <PdfUploader onUpload={uploadPdf} />
-                  </div>
-                  <button
-                    onClick={summarize}
-                    disabled={!text.trim()}
-                    className="bg-white text-black p-3 rounded-full hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="px-6 py-6 space-y-8 w-full max-w-5xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
-              
-              <div className="relative group rounded-3xl border border-zinc-800/80 bg-zinc-950/60 backdrop-blur-xl shadow-2xl overflow-hidden transition-all duration-500 hover:border-zinc-700/80">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-transparent opacity-40 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-                <div className="p-2 sm:p-4">
-                  <textarea
-                    placeholder="พิมพ์เนื้อหาเพิ่มเติมเพื่อเริ่มสรุป หรืออัปโหลดไฟล์ PDF ด้านล่าง..."
-                    className="w-full h-36 bg-transparent border-0 px-4 py-2 text-zinc-100 placeholder-zinc-600 focus:ring-0 outline-none resize-none leading-relaxed text-base md:text-lg custom-scrollbar"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                  />
-                </div>
-
-                {/* --- Control Bar --- */}
-                <div className="bg-zinc-900/80 px-4 sm:px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4 border-t border-zinc-800/80">
-                  
-                  {/* --- ส่วนซ้าย: ชื่อไฟล์ (ปรับปรุง: ล็อกพื้นที่และตัดคำ) --- */}
-                  <div className="w-full lg:max-w-[30%] xl:max-w-[40%] flex justify-center lg:justify-start overflow-hidden">
-                    {(pdf || (fileId && fileId !== "manual")) ? (
-                      <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm min-w-0 max-w-full">
-                        <svg className="shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        
-                        {/* จุดสำคัญ: ใช้ truncate เพื่อตัดคำเป็น ... และใส่ min-w-0 เพื่อให้ตัดคำได้จริง */}
-                        <span className="font-medium truncate block">
-                          {pdf ? pdf.name : (historyItems.find(i => i.id === currentHistoryId)?.fileName || fileId)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-zinc-500 text-sm font-medium px-2 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-zinc-600"></span>
-                        โmovedข้อความ (Manual)
-                      </div>
-                    )}
-                  </div>
-
-                  {/* --- ส่วนขวา: ปุ่มเครื่องมือ (ปรับปรุง: เพิ่ม shrink-0 เพื่อห้ามปุ่มเล็กลง) --- */}
-                  <div className="w-full lg:w-auto flex flex-wrap items-center justify-center lg:justify-end gap-2 sm:gap-3 shrink-0">
-                    
-                    <button 
-                      onClick={summarize} 
-                      disabled={loading} 
-                      className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-sm flex-1 sm:flex-none whitespace-nowrap"
-                    >
-                      สรุปเนื้อหา
-                    </button>
-                    
-                    {currentUser && (
-                      <button 
-                        onClick={() => setNoteOpen(true)} 
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-zinc-800/60 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700 hover:text-white flex-1 sm:flex-none whitespace-nowrap"
-                      >
-                         โน้ต
-                      </button>
-                    )}
-
-                    <div className="hidden sm:block w-px h-6 bg-zinc-700/50 mx-1 shrink-0"></div>
-
-                    <QuizToolbar
-                      mcqCount={mcqCount}
-                      tfCount={tfCount}
-                      loading={loading}
-                      onAddMcq={() => handleAddQuiz("mcq")}
-                      onAddTf={() => handleAddQuiz("tf")}
+                        backgroundSize: '40px 40px, 40px 40px, 40px 40px'
+                      }}
                     />
 
+                    <div className="relative z-10 mb-8 space-y-4">
+                      <h1 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-500 via-teal-400 to-emerald-400 bg-clip-text text-transparent pb-2 drop-shadow-2xl h-20 flex items-center justify-center">
+                        {welcomeText}<span className="animate-pulse text-white">|</span>
+                      </h1>
+                      <p className="text-slate-500 text-lg">
+                        อัปโหลด PDF หรือพิมพ์เนื้อหาเพื่อเริ่มสรุปและสร้างข้อสอบได้ทันที
+                      </p>
+                    </div>
+
+                    <div className="w-full max-w-2xl bg-white/80 border border-slate-300 rounded-3xl p-4 shadow-2xl backdrop-blur-sm relative z-10 group focus-within:border-indigo-500 transition-colors">
+                      <textarea
+                        placeholder="พิมพ์เนื้อหาที่ต้องการสรุป หรือถามคำถาม..."
+                        className="w-full h-32 bg-transparent border-0 outline-none text-lg resize-none placeholder-slate-400 text-slate-800"
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); summarize(); } }}
+                      />
+
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="flex gap-2">
+                          <PdfUploader onUpload={uploadPdf} />
+                        </div>
+                        <button
+                          onClick={summarize}
+                          disabled={!text.trim()}
+                          className="bg-white text-black p-3 rounded-full hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col lg:flex-row gap-6 px-6 py-6 w-full max-w-[1600px] mx-auto animate-in slide-in-from-bottom-4 duration-500">
+                    {/* 🟢 PDF View Panel (Left Side) */}
+                    {documentId && pdfExists && (
+                      <div className="w-full lg:w-[45%] h-[80vh] border border-slate-200 rounded-3xl overflow-hidden shadow-xl bg-slate-100 flex flex-col shrink-0 lg:sticky lg:top-24">
+                        <div className="px-5 py-3.5 bg-white border-b border-slate-200/80 flex items-center justify-between shrink-0">
+                          <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm md:text-base">
+                            <svg className="text-red-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            เอกสารอ้างอิง
+                          </div>
+                          <a 
+                            href={`http://localhost:8000/static/pdfs/${documentId}.pdf`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="text-xs text-indigo-600 hover:text-indigo-500 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            เปิดแยกหน้าต่าง
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                          </a>
+                        </div>
+                        <iframe 
+                          src={`http://localhost:8000/static/pdfs/${documentId}.pdf#toolbar=1`} 
+                          className="w-full h-full border-0"
+                          title="PDF Document Viewer"
+                        />
+                      </div>
+                    )}
+
+                    {/* 🟢 Workspace Section (Right Side / Main Content) */}
+                    <div className="flex-1 min-w-0 space-y-8">
+
+                    <div className="relative group rounded-3xl border border-slate-200/80 bg-slate-50/60 backdrop-blur-xl shadow-2xl overflow-hidden transition-all duration-500 hover:border-slate-300/80">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500/40 via-purple-500/40 to-transparent opacity-40 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                      <div className="p-2 sm:p-4">
+                        <textarea
+                          placeholder="พิมพ์เนื้อหาเพิ่มเติมเพื่อเริ่มสรุป หรืออัปโหลดไฟล์ PDF ด้านล่าง..."
+                          className="w-full h-36 bg-transparent border-0 px-4 py-2 text-slate-800 placeholder-slate-400 focus:ring-0 outline-none resize-none leading-relaxed text-base md:text-lg custom-scrollbar"
+                          value={text}
+                          onChange={(e) => setText(e.target.value)}
+                        />
+                      </div>
+
+                      {/* --- Control Bar --- */}
+                      <div className="bg-white/80 px-4 sm:px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4 border-t border-slate-200/80">
+
+                        {/* --- ส่วนซ้าย: ชื่อไฟล์ (ปรับปรุง: ล็อกพื้นที่และตัดคำ) --- */}
+                        <div className="w-full lg:max-w-[30%] xl:max-w-[40%] flex justify-center lg:justify-start overflow-hidden">
+                          {(pdf || (fileId && fileId !== "manual")) ? (
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm min-w-0 max-w-full">
+                              <svg className="shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+
+                              {/* จุดสำคัญ: ใช้ truncate เพื่อตัดคำเป็น ... และใส่ min-w-0 เพื่อให้ตัดคำได้จริง */}
+                              <span className="font-medium truncate block">
+                                {pdf ? pdf.name : (historyItems.find(i => i.id === currentHistoryId)?.fileName || fileId)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-slate-500 text-sm font-medium px-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                              โmovedข้อความ (Manual)
+                            </div>
+                          )}
+                        </div>
+
+                        {/* --- ส่วนขวา: ปุ่มเครื่องมือ (ปรับปรุง: เพิ่ม shrink-0 เพื่อห้ามปุ่มเล็กลง) --- */}
+                        <div className="w-full lg:w-auto flex flex-wrap items-center justify-center lg:justify-end gap-2 sm:gap-3 shrink-0">
+
+                          <button
+                            onClick={summarize}
+                            disabled={loading}
+                            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 bg-gradient-to-br from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 shadow-sm flex-1 sm:flex-none whitespace-nowrap"
+                          >
+                            สรุปเนื้อหา
+                          </button>
+
+                          {currentUser && (
+                            <button
+                              onClick={() => setNoteOpen(true)}
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 disabled:opacity-50 bg-slate-100/60 border border-slate-300/60 text-slate-600 hover:bg-slate-200 hover:text-white flex-1 sm:flex-none whitespace-nowrap"
+                            >
+                              โน้ต
+                            </button>
+                          )}
+
+                          <div className="hidden sm:block w-px h-6 bg-slate-200/50 mx-1 shrink-0"></div>
+
+                          <QuizToolbar
+                            mcqCount={mcqCount}
+                            tfCount={tfCount}
+                            loading={loading}
+                            onAddMcq={() => handleAddQuiz("mcq")}
+                            onAddTf={() => handleAddQuiz("tf")}
+                            difficultyLevel={difficultyLevel}
+                            onChangeDifficulty={setDifficultyLevel}
+                          />
+
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <QASection
+                      qaInput={qaInput}
+                      qaHistory={qaHistory}
+                      loading={loading}
+                      onInputChange={setQaInput}
+                      onAsk={handleAskQA}
+                      pendingQuestion={qa.pendingQuestion}
+                    />
+
+                    {error && <Card className="border-red-700/50 bg-red-900/20 text-red-200">{error}</Card>}
+
+                    <SummarySection overview={overview} keyPoints={keyPoints} sections={sections} />
+
+                    <QuizSection
+                      questions={questions}
+                      answers={answers}
+                      score={score}
+                      lockedCount={lockedCount}
+                      isOverallSubmitted={isOverallSubmitted}
+                      isAllAnswered={isAllAnswered}
+                      showSaveButton={!!currentUser}
+                      onAnswerChange={(idx, val) => handleAnswerChange(idx, val, currentHistoryId, setHistoryItems)}
+                      onSubmit={handleSubmitQuiz}
+                      onSaveQuestion={(idx) => bank.openSaveQuestion(idx)}
+                    />
                   </div>
                 </div>
-
+              )}
+              </>
+            ) : activeSection === 'subjects' ? (
+              <SubjectsSection />
+            ) : activeSection === 'quiz_bank' ? (
+              <QuizBankSection bank={bank} onError={setError} />
+            ) : activeSection === 'reports' ? (
+              <ReportsSection historyItems={historyItems} />
+            ) : (
+              <div className="flex-1 flex items-center justify-center h-full p-8 text-center animate-in fade-in duration-500">
+                <div className="max-w-md space-y-4">
+                  <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-700">กำลังพัฒนาเนื้อหาส่วนนี้</h2>
+                  <p className="text-slate-500">ระบบในส่วนของ {activeSection} กำลังถูกสร้างและจะเปิดให้ใช้งานในเร็วๆ นี้</p>
+                </div>
               </div>
+            )}
+          </main>
+        </div>
 
-              <QASection
-                qaInput={qaInput}
-                qaHistory={qaHistory}
-                loading={loading}
-                onInputChange={setQaInput}
-                onAsk={handleAskQA}
-              />
-
-              {error && <Card className="border-red-700/50 bg-red-900/20 text-red-200">{error}</Card>}
-
-              <SummarySection overview={overview} keyPoints={keyPoints} sections={sections} />
-
-              <QuizSection
-                questions={questions}
-                answers={answers}
-                score={score}
-                lockedCount={lockedCount}
-                isOverallSubmitted={isOverallSubmitted}
-                isAllAnswered={isAllAnswered}
-                showSaveButton={!!currentUser}
-                onAnswerChange={(idx, val) => handleAnswerChange(idx, val, currentHistoryId, setHistoryItems)}
-                onSubmit={handleSubmitQuiz}
-                onSaveQuestion={(idx) => bank.openSaveQuestion(idx)}
-              />
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* 🟢 Premium Loading Overlay */}
-      {loadingText && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"></div>
-          <div className="relative bg-zinc-900/90 border border-zinc-700/50 shadow-[0_0_50px_rgba(99,102,241,0.15)] rounded-3xl p-8 flex flex-col items-center gap-6 animate-in zoom-in-95 fade-in duration-300 min-w-[320px] max-w-sm text-center">
-            <div className="relative flex items-center justify-center w-20 h-20">
-              {/* Outer spinning ring */}
-              <div className="absolute inset-0 rounded-full border-[3px] border-zinc-800"></div>
-              <div className="absolute inset-0 rounded-full border-[3px] border-indigo-500 border-t-transparent animate-spin"></div>
-              {/* Inner glowing element */}
-              <div className="w-8 h-8 bg-indigo-500/20 rounded-full blur-md animate-pulse"></div>
-              <svg className="absolute text-indigo-400 w-8 h-8 animate-pulse" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path></svg>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-zinc-100 font-bold text-lg tracking-wide">{loadingText}</h3>
-              <p className="text-zinc-500 text-sm">กรุณารอสักครู่ ระบบกำลังประมวลผล...</p>
+        {/* 🟢 Premium Loading Overlay */}
+        {loadingText && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"></div>
+            <div className="relative bg-white/90 border border-slate-300/50 shadow-[0_0_50px_rgba(99,102,241,0.15)] rounded-3xl p-8 flex flex-col items-center gap-6 animate-in zoom-in-95 fade-in duration-300 min-w-[320px] max-w-sm text-center">
+              <div className="relative flex items-center justify-center w-20 h-20">
+                {/* Outer spinning ring */}
+                <div className="absolute inset-0 rounded-full border-[3px] border-slate-200"></div>
+                <div className="absolute inset-0 rounded-full border-[3px] border-indigo-500 border-t-transparent animate-spin"></div>
+                {/* Inner glowing element */}
+                <div className="w-8 h-8 bg-indigo-500/20 rounded-full blur-md animate-pulse"></div>
+                <svg className="absolute text-indigo-400 w-8 h-8 animate-pulse" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path></svg>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-slate-800 font-bold text-lg tracking-wide">{loadingText}</h3>
+                <p className="text-slate-500 text-sm">กรุณารอสักครู่ ระบบกำลังประมวลผล...</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <Modal open={noteOpen} onClose={() => setNoteOpen(false)} title="โน้ตของฉัน" rightInfo={<>{noteStatus === "saving" && "กำลังบันทึก…"}{noteStatus === "saved" && (noteUpdatedAt ? `บันทึกล่าสุด: ${new Date(noteUpdatedAt).toLocaleString()}` : "บันทึกแล้ว")}{noteStatus === "error" && <span className="text-red-300">บันทึกล้มเหลว</span>}</>}>
-        <textarea placeholder="จดสรุป/ประเด็นสำคัญ/ข้อสงสัย… (บันทึกอัตโนมัติ)" className="w-full h-60 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-3 outline-none focus:border-indigo-500" value={note} onChange={(e) => setNote(e.target.value)} />
-        <div className="mt-2 text-xs text-zinc-500">* ระบบบันทึกอัตโนมัติและผูกโน้ตกับไฟล์ที่คุณใช้งานอยู่</div>
-      </Modal>
+        <Modal open={noteOpen} onClose={() => setNoteOpen(false)} title="โน้ตของฉัน" rightInfo={<>{noteStatus === "saving" && "กำลังบันทึก…"}{noteStatus === "saved" && (noteUpdatedAt ? `บันทึกล่าสุด: ${new Date(noteUpdatedAt).toLocaleString()}` : "บันทึกแล้ว")}{noteStatus === "error" && <span className="text-red-300">บันทึกล้มเหลว</span>}</>}>
+          <textarea placeholder="จดสรุป/ประเด็นสำคัญ/ข้อสงสัย… (บันทึกอัตโนมัติ)" className="w-full h-60 rounded-xl bg-white border border-slate-200 px-3 py-3 outline-none focus:border-blue-500" value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="mt-2 text-xs text-slate-500">* ระบบบันทึกอัตโนมัติและผูกโน้ตกับไฟล์ที่คุณใช้งานอยู่</div>
+        </Modal>
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
-
-      <BankPanel
-        {...bank}
-        questions={questions}
-        onError={setError}
-      />
+        <BankPanel
+          {...bank}
+          questions={questions}
+          onError={setError}
+        />
+      </div>
     </div>
   );
 }

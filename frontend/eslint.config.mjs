@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "theme-updater.js",
+    "theme-updater-cleanup.js",
   ]),
 ]);
 

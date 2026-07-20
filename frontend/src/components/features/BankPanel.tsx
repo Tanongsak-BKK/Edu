@@ -29,12 +29,12 @@ function EditQuestionRow({
   const isMcq = q.type === "mcq";
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-sm space-y-2">
+    <div className="rounded-xl border border-slate-200 bg-white/60 p-3 text-sm space-y-2">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <label className="block text-[13px] text-zinc-400 mb-1">ข้อที่ {index + 1}</label>
+          <label className="block text-[13px] text-slate-500 mb-1">ข้อที่ {index + 1}</label>
           <input
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 font-medium text-zinc-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             value={q.question}
             onChange={(e) => setQ({ ...q, question: e.target.value })}
             placeholder="พิมพ์คำถาม…"
@@ -49,7 +49,7 @@ function EditQuestionRow({
           {Array.from({ length: 4 }).map((_, i) => (
             <input
               key={i}
-              className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2"
+              className="rounded-xl bg-white border border-slate-200 px-3 py-2"
               value={(q.choices ?? ["", "", "", ""])[i] ?? ""}
               onChange={(e) => {
                 const arr = (q.choices ?? ["", "", "", ""]).slice(0, 4);
@@ -61,7 +61,7 @@ function EditQuestionRow({
             />
           ))}
           <select
-            className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2"
+            className="rounded-xl bg-white border border-slate-200 px-3 py-2"
             value={q.answer}
             onChange={(e) => setQ({ ...q, answer: e.target.value })}
           >
@@ -79,7 +79,7 @@ function EditQuestionRow({
         </div>
       )}
       <input
-        className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2"
+        className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2"
         value={q.explain ?? ""}
         onChange={(e) => setQ({ ...q, explain: e.target.value })}
         placeholder="เหตุผล/คำอธิบาย…"
@@ -133,18 +133,18 @@ export function BankPanel({
       >
         <div className="space-y-3">
           {saveOpen.qIndex !== null && questions[saveOpen.qIndex] && (
-            <div className="p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-sm text-zinc-300 mb-4">
+            <div className="p-3 rounded-xl bg-slate-100/50 border border-slate-300/50 text-sm text-slate-600 mb-4">
               <span className="font-semibold text-indigo-400">ข้อที่เลือก:</span> {questions[saveOpen.qIndex].question}
             </div>
           )}
           <div className="grid gap-2">
             {sets.length === 0 && (
-              <div className="text-center text-zinc-500 py-4">ยังไม่มีชุดข้อสอบ (ไปสร้างที่เมนู &quot;จัดการชุดข้อสอบ&quot; ก่อน)</div>
+              <div className="text-center text-slate-500 py-4">ยังไม่มีชุดข้อสอบ (ไปสร้างที่เมนู &quot;จัดการชุดข้อสอบ&quot; ก่อน)</div>
             )}
             {sets.map((s) => (
               <button
                 key={s.id}
-                className="flex items-center justify-between p-3 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 transition text-left group"
+                className="flex items-center justify-between p-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 transition text-left group"
                 onClick={async () => {
                   if (saveOpen.qIndex === null) return;
                   const q = questions[saveOpen.qIndex];
@@ -158,7 +158,7 @@ export function BankPanel({
                 }}
               >
                 <span className="font-medium">{s.title}</span>
-                <span className="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400 group-hover:bg-zinc-700">
+                <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500 group-hover:bg-slate-200">
                   {s.question_ids.length} ข้อ
                 </span>
               </button>
@@ -171,7 +171,7 @@ export function BankPanel({
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <input
-              className="flex-1 rounded-2xl bg-zinc-900/50 border border-zinc-800 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+              className="flex-1 rounded-2xl bg-white/50 border border-slate-200 px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
               placeholder="ตั้งชื่อชุดข้อสอบใหม่…"
               value={creatingTitle}
               onChange={(e) => setCreatingTitle(e.target.value)}
@@ -188,29 +188,29 @@ export function BankPanel({
                 await createSet(creatingTitle.trim());
                 setCreatingTitle("");
               }}
-              className="rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-purple-500 transition-all whitespace-nowrap flex items-center justify-center gap-2"
+              className="rounded-2xl bg-gradient-to-r from-blue-600 to-emerald-500 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/25 hover:from-blue-500 hover:to-emerald-400 transition-all whitespace-nowrap flex items-center justify-center gap-2"
             >
               สร้างชุดใหม่
             </button>
           </div>
 
           {sets.length === 0 ? (
-            <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
+            <div className="text-center py-12 text-slate-500 border border-dashed border-slate-200 rounded-2xl bg-white/20">
               ยังไม่มีชุดข้อสอบ — ลองสร้างชุดแรกดูสิ
             </div>
           ) : (
             <ul className="space-y-3">
               {sets.map((s) => (
-                <li key={s.id} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 hover:border-zinc-700/80 hover:bg-zinc-800/40 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 group">
+                <li key={s.id} className="rounded-2xl border border-slate-200/80 bg-white/40 p-4 hover:border-slate-300/80 hover:bg-slate-100/40 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 group">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-semibold text-lg text-zinc-200 truncate">{s.title}</span>
-                    <span className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-800/80 border border-zinc-700 text-xs text-zinc-400 font-medium flex items-center gap-1">
+                    <span className="font-semibold text-lg text-slate-700 truncate">{s.title}</span>
+                    <span className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100/80 border border-slate-300 text-xs text-slate-500 font-medium flex items-center gap-1">
                       <span>{s.question_ids.length}</span> ข้อ
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
-                      className="text-xs px-3 py-2 rounded-xl bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700 hover:text-white transition border border-zinc-700/50"
+                      className="text-xs px-3 py-2 rounded-xl bg-slate-100/50 text-slate-600 hover:bg-slate-200 hover:text-white transition border border-slate-300/50"
                       onClick={async () => {
                         const name = prompt("แก้ไขชื่อชุดข้อสอบ:", s.title) || s.title;
                         await renameSet(s.id, name);
@@ -253,28 +253,28 @@ export function BankPanel({
       <Modal open={manualOpen} onClose={() => setManualOpen(false)} title="เพิ่มข้อสอบเองลงชุด" rightInfo={<button className="text-indigo-300 hover:underline" onClick={() => loadSets()}>รีเฟรชเซ็ต</button>}>
         <div className="space-y-3">
           <div className="flex gap-2">
-            <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualSetId ?? ""} onChange={(e) => setManualSetId(e.target.value ? Number(e.target.value) : null)}>
+            <select className="rounded-xl bg-white border border-slate-200 px-3 py-2" value={manualSetId ?? ""} onChange={(e) => setManualSetId(e.target.value ? Number(e.target.value) : null)}>
               <option value="">เลือกชุดที่จะเพิ่ม…</option>
               {sets.map((s) => (<option key={s.id} value={s.id}>{s.title} ({s.question_ids.length} ข้อ)</option>))}
             </select>
-            <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualType} onChange={(e) => setManualType(e.target.value as "mcq" | "tf")}>
+            <select className="rounded-xl bg-white border border-slate-200 px-3 py-2" value={manualType} onChange={(e) => setManualType(e.target.value as "mcq" | "tf")}>
               <option value="mcq">แบบปรนัย</option>
               <option value="tf">แบบถูกผิด</option>
             </select>
           </div>
-          <textarea className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" placeholder="พิมพ์คำถาม…" value={manualQ} onChange={(e) => setManualQ(e.target.value)} />
+          <textarea className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2" placeholder="พิมพ์คำถาม…" value={manualQ} onChange={(e) => setManualQ(e.target.value)} />
           {manualType === "mcq" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {manualChoices.map((c, i) => (
                 <input
                   key={i}
-                  className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2"
+                  className="rounded-xl bg-white border border-slate-200 px-3 py-2"
                   placeholder={`ช้อยส์ ${idxToLetter[i]}`}
                   value={c}
                   onChange={(e) => { const clone = manualChoices.slice(); clone[i] = e.target.value; setManualChoices(clone); }}
                 />
               ))}
-              <select className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" value={manualAns} onChange={(e) => setManualAns(e.target.value)}>
+              <select className="rounded-xl bg-white border border-slate-200 px-3 py-2" value={manualAns} onChange={(e) => setManualAns(e.target.value)}>
                 {idxToLetter.map((l) => (<option key={l} value={l}>{`เฉลย ${l}`}</option>))}
               </select>
             </div>
@@ -288,7 +288,7 @@ export function BankPanel({
               </label>
             </div>
           )}
-          <input className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2" placeholder="เหตุผล/คำอธิบาย (ถ้ามี)…" value={manualExplain} onChange={(e) => setManualExplain(e.target.value)} />
+          <input className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2" placeholder="เหตุผล/คำอธิบาย (ถ้ามี)…" value={manualExplain} onChange={(e) => setManualExplain(e.target.value)} />
           <div className="flex justify-end">
             <PrimaryBtn
               onClick={async () => {
@@ -324,17 +324,17 @@ export function BankPanel({
         rightInfo={<button className="text-indigo-300 hover:underline" onClick={() => { loadBank(); loadSets(); }}>รีเฟรช</button>}
       >
         {!editOpen.set ? (
-          <div className="text-sm text-zinc-400">ไม่พบชุด</div>
+          <div className="text-sm text-slate-500">ไม่พบชุด</div>
         ) : (
           <div className="space-y-3">
             {(editOpen.set?.question_ids ?? []).length === 0 && (
-              <div className="text-sm text-zinc-400">ยังไม่มีข้อสอบในชุดนี้</div>
+              <div className="text-sm text-slate-500">ยังไม่มีข้อสอบในชุดนี้</div>
             )}
             {(editOpen.set?.question_ids ?? []).map((qid, index) => {
               const q = bankQuestions.find((b) => b.id === qid);
               if (!q) {
                 return (
-                  <div key={qid} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
+                  <div key={qid} className="rounded-xl border border-slate-200 bg-white/60 p-3 text-sm">
                     <div className="flex items-center justify-between">
                       <div className="text-red-300">ไม่พบข้อสอบ ID {qid}</div>
                       <PrimaryBtn

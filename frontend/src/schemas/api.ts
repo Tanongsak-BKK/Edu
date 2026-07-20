@@ -45,6 +45,7 @@ export const HistoryItemSchema = z.object({
   content: z.string().optional(),
   qa_history: z.array(z.object({ question: z.string(), answer: z.string() })).optional(),
   lockedCount: z.number().optional(),
+  document_id: z.string().optional().default(""),
 });
 
 export const HistoryListSchema = z.array(HistoryItemSchema);
@@ -73,6 +74,7 @@ export const QuizSetListSchema = z.array(QuizSetSchema);
 
 export const PdfExtractSchema = z.object({
   text: z.string().optional().default(""),
+  document_id: z.string().optional(),
 });
 
 export const NoteSchema = z.object({

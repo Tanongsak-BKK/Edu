@@ -4,10 +4,10 @@ export function LoadingOverlay({ loadingText }: { loadingText: string }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"></div>
-      <div className="relative bg-zinc-900/90 border border-zinc-700/50 shadow-[0_0_50px_rgba(99,102,241,0.15)] rounded-3xl p-8 flex flex-col items-center gap-6 animate-in zoom-in-95 fade-in duration-300 min-w-[320px] max-w-sm text-center">
+      <div className="relative bg-white/90 border border-slate-300/50 shadow-[0_0_50px_rgba(99,102,241,0.15)] rounded-3xl p-8 flex flex-col items-center gap-6 animate-in zoom-in-95 fade-in duration-300 min-w-[320px] max-w-sm text-center">
         <div className="relative flex items-center justify-center w-20 h-20">
           {/* Outer spinning ring */}
-          <div className="absolute inset-0 rounded-full border-[3px] border-zinc-800"></div>
+          <div className="absolute inset-0 rounded-full border-[3px] border-slate-200"></div>
           <div className="absolute inset-0 rounded-full border-[3px] border-indigo-500 border-t-transparent animate-spin"></div>
           {/* Inner glowing element */}
           <div className="w-8 h-8 bg-indigo-500/20 rounded-full blur-md animate-pulse"></div>
@@ -23,8 +23,8 @@ export function LoadingOverlay({ loadingText }: { loadingText: string }) {
           </svg>
         </div>
         <div className="space-y-2">
-          <h3 className="text-zinc-100 font-bold text-lg tracking-wide">{loadingText}</h3>
-          <p className="text-zinc-500 text-sm">กรุณารอสักครู่ ระบบกำลังประมวลผล...</p>
+          <h3 className="text-slate-800 font-bold text-lg tracking-wide">{loadingText}</h3>
+          <p className="text-slate-500 text-sm">กรุณารอสักครู่ ระบบกำลังประมวลผล...</p>
         </div>
       </div>
     </div>

@@ -9,4 +9,4 @@ router = APIRouter()
 
 @router.post("", response_model=SummarizeOut)
 def summarize(body: ContextIn, uid: str = Depends(get_current_user)):
-    return SummarizeService.summarize(body.context or "", uid)
+    return SummarizeService.summarize(body.context or "", uid, document_id=body.document_id)

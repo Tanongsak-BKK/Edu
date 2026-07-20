@@ -21,3 +21,7 @@ pdfplumber
 reportlab
 
 requests
+
+# Local Vector Embeddings (BAAI bge-m3)
+sentence-transformers
+torch

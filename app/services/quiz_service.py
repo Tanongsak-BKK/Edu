@@ -10,10 +10,13 @@ from app.utils.text import safe_json_loads, truncate_text_chars
 
 class QuizService:
     @staticmethod
-    def extract_topics(context: str) -> List[str]:
+    def extract_topics(context: str, document_id: Optional[str] = None) -> List[str]:
         ctx = (context or "").strip()
-        if not ctx:
+        if not ctx and not document_id:
             raise HTTPException(400, "context ว่าง")
+
+        from app.services.rag_service import RagService
+        ctx = RagService.get_relevant_context(ctx, "ภาพรวมเนื้อหาทั้งหมด หัวข้อสำคัญ สารบัญ และบทสรุป", top_k=6, force_rag_threshold=15000, document_id=document_id)
 
         prompt = f"""
 สกัดหัวข้อ/แนวคิดสำคัญจากเนื้อหาด้านล่าง (ไม่เกิน 30 หัวข้อ)
@@ -41,8 +44,10 @@ class QuizService:
         n: int,
         exclude: Optional[List[str]] = None,
         topics: Optional[List[str]] = None,
+        document_id: Optional[str] = None,
+        difficulty: str = "mixed",
     ) -> List[Dict[str, Any]]:
-        return QuizService._generate_batch("mcq", context, n, exclude, topics)
+        return QuizService._generate_batch("mcq", context, n, exclude, topics, document_id, difficulty)
 
     @staticmethod
     def generate_tf(
@@ -50,8 +55,10 @@ class QuizService:
         n: int,
         exclude: Optional[List[str]] = None,
         topics: Optional[List[str]] = None,
+        document_id: Optional[str] = None,
+        difficulty: str = "mixed",
     ) -> List[Dict[str, Any]]:
-        return QuizService._generate_batch("tf", context, n, exclude, topics)
+        return QuizService._generate_batch("tf", context, n, exclude, topics, document_id, difficulty)
 
     @staticmethod
     def _generate_batch(
@@ -60,14 +67,23 @@ class QuizService:
         n: int,
         exclude: Optional[List[str]],
         topics: Optional[List[str]],
+        document_id: Optional[str] = None,
+        difficulty: str = "mixed",
     ) -> List[Dict[str, Any]]:
         ctx = (context or "").strip()
         count = max(1, min(10, int(n or 5)))
-        if not ctx:
+        if not ctx and not document_id:
             raise HTTPException(400, "context ว่าง")
 
-        exclude_list = [str(x).strip() for x in (exclude or []) if str(x).strip()]
         topic_list = [str(t).strip() for t in (topics or []) if str(t).strip()] or None
+        
+        from app.services.rag_service import RagService
+        query_str = "เนื้อหาที่สำคัญสำหรับออกข้อสอบ"
+        if topic_list:
+            query_str += " ในหัวข้อ: " + ", ".join(topic_list)
+        ctx = RagService.get_relevant_context(ctx, query_str, top_k=8, force_rag_threshold=15000, document_id=document_id)
+
+        exclude_list = [str(x).strip() for x in (exclude or []) if str(x).strip()]
 
         collected: List[Dict[str, Any]] = []
         tries = 0
@@ -79,9 +95,9 @@ class QuizService:
             request_n = need + 3 if tries == 0 else need
 
             if qtype == "mcq":
-                batch = QuizService._gen_mcq_once(ctx, request_n, excludes_now, topic_hints)
+                batch = QuizService._gen_mcq_once(ctx, request_n, excludes_now, topic_hints, difficulty)
             else:
-                batch = QuizService._gen_tf_once(ctx, request_n, excludes_now, topic_hints)
+                batch = QuizService._gen_tf_once(ctx, request_n, excludes_now, topic_hints, difficulty)
 
             for q in batch:
                 if len(collected) >= count:
@@ -106,6 +122,7 @@ class QuizService:
         n: int,
         exclude_list: List[str],
         topic_hints: Optional[List[str]] = None,
+        difficulty: str = "mixed",
     ) -> List[Dict[str, Any]]:
         exclude_block = ""
         if exclude_list:
@@ -122,8 +139,17 @@ class QuizService:
                 + "\n"
             )
 
+        diff_prompt = ""
+        if difficulty == "easy":
+            diff_prompt = "- ระดับความยาก: ง่าย (เน้นความจำ นิยามตรงๆ ความรู้พื้นฐาน)"
+        elif difficulty == "hard":
+            diff_prompt = "- ระดับความยาก: ยากมาก (เน้นการวิเคราะห์ลึกซึ้ง ประยุกต์ใช้ขั้นสูง และหลอกคำตอบให้ใกล้เคียงกันที่สุด)"
+        else:
+            diff_prompt = "- ระดับความยาก: ปานกลาง (เน้นความเข้าใจ การประยุกต์เบื้องต้น)"
+
         prompt = f"""
 สร้างข้อสอบปรนัย {n} ข้อ จากเนื้อหาด้านล่าง
+{diff_prompt}
 - คำตอบถูกมีเพียงข้อเดียว
 - ห้ามตัวเลือกแบบ "ถูกทุกข้อ/ทั้ง ก และ ข/ไม่ถูกสักข้อ"
 - ตอบ JSON: {{"questions":[{{"type":"mcq","question":"...","choices":["ก) ...","ข) ...","ค) ...","ง) ..."],"answer":"ก|ข|ค|ง","explain":"...","topic":"..."}}]}}
@@ -146,6 +172,7 @@ class QuizService:
         n: int,
         exclude_list: List[str],
         topic_hints: Optional[List[str]] = None,
+        difficulty: str = "mixed",
     ) -> List[Dict[str, Any]]:
         exclude_block = ""
         if exclude_list:
@@ -162,8 +189,17 @@ class QuizService:
                 + "\n"
             )
 
+        diff_prompt = ""
+        if difficulty == "easy":
+            diff_prompt = "- ระดับความยาก: ง่าย (เน้นถามข้อเท็จจริงแบบตรงไปตรงมา ไม่ซับซ้อน)"
+        elif difficulty == "hard":
+            diff_prompt = "- ระดับความยาก: ยากมาก (เน้นการวิเคราะห์ จุดหลอกที่แนบเนียน และการตีความเชิงลึก)"
+        else:
+            diff_prompt = "- ระดับความยาก: ปานกลาง (เน้นความเข้าใจทั่วไป)"
+
         prompt = f"""
 สร้างข้อสอบ ถูก/ผิด จำนวน {n} ข้อ จากเนื้อหาด้านล่าง
+{diff_prompt}
 - ให้เหตุผลสั้น ๆ ทุกข้อ
 - ตอบ JSON: {{"questions":[{{"type":"tf","question":"...","answer":"true|false","explain":"...","topic":"..."}}]}}
 {topic_block}{exclude_block}

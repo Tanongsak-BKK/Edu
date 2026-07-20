@@ -19,7 +19,7 @@ def init_firebase(project_id: str, cred_path: str = "./service-account.json"):
                     cred,
                     {"projectId": project_id} if project_id else None,
                 )
-            _db = firestore.Client(project=project_id) if project_id else firestore.Client()
+            _db = firestore.Client(project=project_id, database="default") if project_id else firestore.Client(database="default")
             print("Firebase Admin / Firestore initialized")
         except Exception as e:
             print(f"Firebase init failed: {e}")

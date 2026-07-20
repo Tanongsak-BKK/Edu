@@ -6,11 +6,12 @@ import { parseApi } from "../lib/validate";
 import { QuizApiResponseSchema, TopicsResponseSchema } from "../schemas/api";
 import { BATCH_SIZE, MAX_QUESTIONS } from "../constants/quiz";
 
-export function useQuiz(context: string) {
+export function useQuiz(context: string, documentId: string) {
   const [questions, setQuestions] = useState<QuizItem[]>([]);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [score, setScore] = useState<number | null>(null);
   const [lockedCount, setLockedCount] = useState(0);
+  const [difficultyLevel, setDifficultyLevel] = useState<"easy" | "medium" | "hard" | "mixed">("mixed");
   const topicsRef = useRef<string[]>([]);
 
   const countByType = useCallback(
@@ -24,6 +25,7 @@ export function useQuiz(context: string) {
     setAnswers({});
     topicsRef.current = [];
     setLockedCount(0);
+    setDifficultyLevel("mixed");
   }, []);
 
   const restoreFromHistory = useCallback((item: {
@@ -41,22 +43,29 @@ export function useQuiz(context: string) {
       } else {
         setScore(item.score);
         setLockedCount(item.lockedCount !== undefined ? item.lockedCount : item.questions.length);
+        
+        // Restore difficulty based on past score
+        const accuracy = item.score / (item.questions.length || 1);
+        if (accuracy >= 0.8) setDifficultyLevel("hard");
+        else if (accuracy < 0.5) setDifficultyLevel("easy");
+        else setDifficultyLevel("medium");
       }
     } else {
       setQuestions([]);
       setScore(null);
       setLockedCount(0);
       setAnswers({});
+      setDifficultyLevel("mixed");
     }
     topicsRef.current = [];
   }, []);
 
   const ensureTopics = useCallback(async () => {
-    if (!context || topicsRef.current.length >= 10) return;
+    if ((!context && !documentId) || topicsRef.current.length >= 10) return;
     try {
       const raw = await apiFetch<unknown>("/quiz/topics", {
         method: "POST",
-        json: { context },
+        json: { context, document_id: documentId },
       });
       const json = parseApi(TopicsResponseSchema, raw, "quiz topics");
       if (json.topics.length > 0) {
@@ -70,7 +79,7 @@ export function useQuiz(context: string) {
         }
       }
     } catch { /* optional */ }
-  }, [context]);
+  }, [context, documentId]);
 
   const addMoreQuiz = useCallback(async (
     type: "mcq" | "tf",
@@ -81,7 +90,7 @@ export function useQuiz(context: string) {
       onUpdated: (newQuestions: QuizItem[]) => Promise<void>;
     },
   ) => {
-    if (!context) return;
+    if (!context && !documentId) return;
     deps.setError(null);
     const already = questions.filter((q) => q.type === type).length;
     const remain = MAX_QUESTIONS - already;
@@ -89,7 +98,14 @@ export function useQuiz(context: string) {
 
     const want = Math.min(BATCH_SIZE, remain);
     deps.setLoading(true);
-    deps.setLoadingText(`กำลังสร้างข้อสอบ ${type === "mcq" ? "แบบปรนัย " : "แบบถูกผิด "} เพิ่ม`);
+    
+    // แจ้งเตือนระดับความยาก
+    let diffText = "";
+    if (difficultyLevel === "hard") diffText = " (ระดับยาก)";
+    else if (difficultyLevel === "easy") diffText = " (ระดับง่าย)";
+    else if (difficultyLevel === "medium") diffText = " (ระดับปานกลาง)";
+    
+    deps.setLoadingText(`กำลังสร้างข้อสอบ ${type === "mcq" ? "แบบปรนัย" : "แบบถูกผิด"}${diffText} เพิ่ม`);
 
     await ensureTopics();
     const topicSlice = topicsRef.current.splice(0, want);
@@ -103,9 +119,11 @@ export function useQuiz(context: string) {
         method: "POST",
         json: {
           context,
+          document_id: documentId,
           n: want,
           exclude: excludeTexts,
           topics: topicSlice.length ? topicSlice : undefined,
+          difficulty: difficultyLevel,
         },
       });
       const json = parseApi(QuizApiResponseSchema, raw, `quiz ${type}`);
@@ -127,7 +145,7 @@ export function useQuiz(context: string) {
       deps.setLoading(false);
       deps.setLoadingText("");
     }
-  }, [context, ensureTopics, questions]);
+  }, [context, documentId, ensureTopics, questions, difficultyLevel]);
 
   const submitQuiz = useCallback(async (onSubmitted: (correct: number) => Promise<void>) => {
     let correct = 0;
@@ -137,6 +155,17 @@ export function useQuiz(context: string) {
     });
     setScore(correct);
     setLockedCount(questions.length);
+    
+    // ปรับระดับความยากตามคะแนน
+    const accuracy = correct / (questions.length || 1);
+    if (accuracy >= 0.8) {
+      setDifficultyLevel("hard"); // เก่งมาก เพิ่มความยาก
+    } else if (accuracy < 0.5) {
+      setDifficultyLevel("easy"); // อ่อน ปรับให้อ่านพื้นฐาน
+    } else {
+      setDifficultyLevel("medium"); // ปานกลาง
+    }
+    
     await onSubmitted(correct);
   }, [questions, answers]);
 
@@ -167,6 +196,8 @@ export function useQuiz(context: string) {
     lockedCount,
     setLockedCount,
     topicsRef,
+    difficultyLevel,
+    setDifficultyLevel,
     countByType,
     resetQuiz,
     restoreFromHistory,

@@ -62,4 +62,5 @@ export type HistoryItem = {
   content?: string;
   qa_history?: QAPair[];
   lockedCount?: number;
+  document_id?: string;
 };

@@ -1,14 +1,27 @@
 from fastapi import APIRouter
 
-from app.models.schemas import ContextIn, QuizIn, TopicsOut
+from app.models.schemas import ContextIn, QuizIn, TopicsOut, EvaluateIn, EvaluateOut
 from app.services.quiz_service import QuizService
+from app.services.evaluation_service import EvaluationService
 
 router = APIRouter()
 
 
+@router.post("/evaluate", response_model=EvaluateOut)
+def evaluate_answer(body: EvaluateIn):
+    result = EvaluationService.evaluate_reasoning(
+        question=body.question,
+        user_answer=body.user_answer,
+        context=body.context or "",
+        document_id=body.document_id,
+        original_choices=body.original_choices
+    )
+    return EvaluateOut(**result)
+
+
 @router.post("/topics", response_model=TopicsOut)
 def quiz_topics(body: ContextIn):
-    topics = QuizService.extract_topics(body.context or "")
+    topics = QuizService.extract_topics(body.context or "", document_id=body.document_id)
     return {"topics": topics}
 
 
@@ -19,6 +32,7 @@ def quiz_mcq(body: QuizIn):
         body.n or 5,
         body.exclude,
         body.topics,
+        document_id=body.document_id
     )
     return {"questions": questions}
 
@@ -30,5 +44,6 @@ def quiz_tf(body: QuizIn):
         body.n or 5,
         body.exclude,
         body.topics,
+        document_id=body.document_id
     )
     return {"questions": questions}

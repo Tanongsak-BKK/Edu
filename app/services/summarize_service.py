@@ -10,8 +10,16 @@ from app.utils.text import clean_text, numbered_sentences, safe_json_loads, trun
 
 class SummarizeService:
     @staticmethod
-    def summarize(context: str, uid: str) -> Dict[str, Any]:
+    def summarize(context: str, uid: str, document_id: str = None) -> Dict[str, Any]:
         ctx_raw = (context or "").strip()
+        ctx_raw = (context or "").strip()
+        if document_id:
+            from app.services.rag_service import RagService
+            pdf_text = RagService.get_document_text(document_id)
+            if pdf_text:
+                ctx_raw = (f"ข้อความเพิ่มเติม:\n{ctx_raw}\n\nเนื้อหาจากเอกสาร:\n{pdf_text}" if ctx_raw else pdf_text).strip()
+            
+            
         if not ctx_raw:
             raise HTTPException(400, "context ว่าง")
 
@@ -27,6 +35,8 @@ class SummarizeService:
 คุณเป็นครูบรรณาธิการสรุปเอกสารแบบยึดตามข้อความเท่านั้น
 - อ่านเฉพาะ "รายการประโยคมีเลขกำกับ"
 - สกัดหัวข้อหลัก 5–9 หัวข้อ และสรุปหัวข้อละ 3–6 ประโยค
+- ⚠️ ห้ามแต่งเติมเนื้อหาหรือความรู้ภายนอกที่ไม่ปรากฏในข้อความนี้เด็ดขาด
+- ⚠️ ให้ขัดเกลาตัวอักษรและการสะกดคำภาษาไทยในหัวข้อและเนื้อหาสรุปทั้งหมดให้ถูกต้องตามหลักภาษาไทยเสมอ (หากประโยคต้นทางสะกดผิด หรือสระ/วรรณยุกต์หาย/เคลื่อนตำแหน่ง ให้แก้ไขสะกดคำให้ถูกต้องในผลลัพธ์สุดท้าย)
 ตอบเป็น JSON: {{"sections":[{{"title":"...","summary":"..."}}]}}
 รายการประโยค:
 {sent_block}
@@ -50,7 +60,8 @@ class SummarizeService:
 1. ตัวเลขสถิติ หรือ จำนวน
 2. ปี พ.ศ./ค.ศ. หรือ วันที่สำคัญ
 3. ชื่อเฉพาะที่สำคัญ หรือ ประเภท/หมวดหมู่
-ถ้าไม่มีตัวเลข ให้ดึงข้อมูลสำคัญสั้นๆ มาใส่ใน value แทน
+- ⚠️ หากไม่มีข้อมูลเชิงตัวเลขหรือข้อมูลสำคัญที่ชัดเจน ห้ามเดาหรือสร้างขึ้นมาเอง ให้ข้ามการสร้าง data_points นั้นไปเลย
+- ⚠️ ให้สะกดคำภาษาไทยให้ถูกต้องตามหลักไวยากรณ์เสมอ หากมีคำผิด สระ/วรรณยุกต์หายหรือเคลื่อนจากข้อมูลต้นฉบับ ให้ปรับปรุงตัวสะกดให้สมบูรณ์
 
 รายการประโยค:
 {truncate_text_chars(ctx, 45000)}
