@@ -35,11 +35,14 @@ def init_firebase(project_id: str, cred_path: str = "./service-account.json"):
                 if cred:
                     firebase_admin.initialize_app(
                         cred,
-                        {"projectId": project_id} if project_id else None,
+                        {
+                            "projectId": project_id,
+                            "storageBucket": f"{project_id}.firebasestorage.app" if project_id else None
+                        } if project_id else None,
                     )
                 else:
                     print("[Firebase] No service account file found, attempting default application credentials...")
-                    firebase_admin.initialize_app()
+                    firebase_admin.initialize_app(options={"storageBucket": f"{project_id}.firebasestorage.app"} if project_id else None)
                     
             _db = firestore.Client(project=project_id, database="default") if project_id else firestore.Client(database="default")
             print("Firebase Admin / Firestore initialized")
@@ -48,6 +51,30 @@ def init_firebase(project_id: str, cred_path: str = "./service-account.json"):
             _db = None
     else:
         print("Firebase Admin / Firestore not available (libraries not installed?)")
+
+def upload_file_to_storage(file_bytes: bytes, destination_path: str, content_type: str = "application/pdf") -> str:
+    """ Uploads a file to Firebase Storage and returns public URL """
+    if firebase_admin is None or not firebase_admin._apps:
+        return ""
+    try:
+        from firebase_admin import storage
+        # Try default bucket or fallback to appspot bucket
+        try:
+            bucket = storage.bucket()
+        except Exception:
+            bucket = storage.bucket(name=f"{os.getenv('FIREBASE_PROJECT_ID', 'edugen-ai-a0504')}.appspot.com")
+            
+        blob = bucket.blob(destination_path)
+        blob.upload_from_string(file_bytes, content_type=content_type)
+        try:
+            blob.make_public()
+            return blob.public_url
+        except Exception:
+            # Fallback to storage media link if make_public fails
+            return f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{destination_path.replace('/', '%2F')}?alt=media"
+    except Exception as e:
+        print(f"[Firebase Storage Error] {e}")
+        return ""
 
 def get_firestore_db():
     return _db

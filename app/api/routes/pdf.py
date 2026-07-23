@@ -52,19 +52,28 @@ async def pdf_extract(pdf: UploadFile = File(...)):
     from app.services.rag_service import RagService
     doc_id = RagService.save_document(text)
     
-    # Save the original PDF file to static directory for visual rendering
+    # Read PDF content once
+    pdf.file.seek(0)
+    pdf_bytes = pdf.file.read()
+    
+    # Save original PDF locally for static rendering fallback
     try:
         import os
         pdf_path = f"static/pdfs/{doc_id}.pdf"
         if not os.path.exists(pdf_path):
-            pdf.file.seek(0)
             with open(pdf_path, "wb") as f:
-                f.write(pdf.file.read())
+                f.write(pdf_bytes)
     except Exception as e:
         print(f"[PDF] Warning: Could not save original PDF to disk: {e}")
-    
+        
+    # Upload original PDF to Firebase Cloud Storage
+    from app.db.firebase import upload_file_to_storage
+    firebase_url = upload_file_to_storage(pdf_bytes, f"pdfs/{doc_id}.pdf", content_type="application/pdf")
+    pdf_url = firebase_url if firebase_url else f"/static/pdfs/{doc_id}.pdf"
+    print(f"[PDF] Final PDF URL: {pdf_url}")
+
     return {
         "document_id": doc_id, 
         "text": text,
-        "pdf_url": f"/static/pdfs/{doc_id}.pdf"
+        "pdf_url": pdf_url
     }
