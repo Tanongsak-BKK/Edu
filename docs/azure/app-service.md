@@ -29,15 +29,22 @@ gunicorn --bind=0.0.0.0:8000 --timeout 600 -k uvicorn.workers.UvicornWorker app.
 Add these application settings:
 
 ```text
-OPENAI_API_KEY=<secret>
+# AI Settings (เลือกใช้อย่างใดอย่างหนึ่ง)
+OPENAI_API_KEY=<your-openai-api-key>
+
+# หรือหากใช้ Azure OpenAI Service (หักเงินเครดิต $100)
+AZURE_OPENAI_ENDPOINT=https://<your-azure-openai-name>.openai.azure.com/
+AZURE_OPENAI_API_KEY=<your-azure-openai-key>
+AZURE_OPENAI_API_VERSION=2024-06-01
+
+# Firebase & App Settings
 FIREBASE_PROJECT_ID=<firebase-project-id>
-GOOGLE_APPLICATION_CREDENTIALS=/home/site/wwwroot/service-account.json
+# เลือกใส่ Base64 string ของ service-account.json เพื่อไม่ต้อง upload ไฟล์
+FIREBASE_SERVICE_ACCOUNT_BASE64=<base64-encoded-service-account-json>
 FRONTEND_ORIGINS=https://your-frontend-app.azurewebsites.net
 ALLOW_DEMO_AUTH=false
 SCM_DO_BUILD_DURING_DEPLOYMENT=true
 ```
-
-If Firebase Admin uses a service account file, upload `service-account.json` to the backend App Service separately or switch the code to read credentials from an app setting.
 
 Health check path:
 

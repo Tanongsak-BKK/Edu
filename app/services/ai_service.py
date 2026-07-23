@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from app.core.config import settings
 
 import time
@@ -9,8 +9,8 @@ class ChatCompletionsWrapper:
         self._completions = completions
 
     def create(self, *args, **kwargs):
-        # Map OpenAI models to local Ollama models
         model = kwargs.get("model")
+        api_key = settings.OPENAI_API_KEY or settings.AZURE_OPENAI_API_KEY or ""
         
         # Check if the messages parameter contains any image inputs (vision task)
         has_images = False
@@ -25,11 +25,17 @@ class ChatCompletionsWrapper:
             if has_images:
                 break
                 
-        if model in ["gpt-4o-mini", "gpt-4o"]:
-            if has_images:
-                kwargs["model"] = "llava"
-            else:
-                kwargs["model"] = "qwen2.5"
+        use_ollama = settings.USE_OLLAMA or api_key == "ollama" or not api_key
+        
+        if use_ollama:
+            if model in ["gpt-4o-mini", "gpt-4o"]:
+                if has_images:
+                    kwargs["model"] = "llava"
+                else:
+                    kwargs["model"] = "qwen2.5"
+        elif api_key.startswith("AQ.") or api_key.startswith("AIzaSy"):
+            if model in ["gpt-4o-mini", "gpt-4o"]:
+                kwargs["model"] = "gemini-3.5-flash"
             
         # Implement automatic retry with exponential backoff for RateLimitError (429)
         max_retries = 5
@@ -54,9 +60,10 @@ class EmbeddingsWrapper:
         self._embeddings = embeddings
 
     def create(self, *args, **kwargs):
-        # Map OpenAI embedding models to Google Gemini embedding models
+        # Map OpenAI embedding models to Google Gemini embedding models only when using Gemini API Key
         model = kwargs.get("model")
-        if model == "text-embedding-3-small":
+        api_key = settings.OPENAI_API_KEY or ""
+        if (api_key.startswith("AQ.") or api_key.startswith("AIzaSy")) and model == "text-embedding-3-small":
             kwargs["model"] = "gemini-embedding-001"
             
         # Implement automatic retry with exponential backoff for RateLimitError (429)
@@ -73,19 +80,37 @@ class EmbeddingsWrapper:
                 time.sleep(delay)
 
 class GeminiOpenAIWrapper:
-    def __init__(self, client: OpenAI):
+    def __init__(self, client):
         self._client = client
         self.chat = ChatWrapper(client.chat)
         self.embeddings = EmbeddingsWrapper(client.embeddings)
 
-# Initialize the OpenAI client pointing to local Ollama API
-raw_client = OpenAI(
-    api_key="ollama",  # Ollama does not check api_key, but it must not be empty
-    base_url="http://localhost:11434/v1"
-)
+api_key = settings.OPENAI_API_KEY or ""
+
+if settings.AZURE_OPENAI_ENDPOINT:
+    raw_client = AzureOpenAI(
+        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+        api_key=settings.AZURE_OPENAI_API_KEY or api_key,
+        api_version=settings.AZURE_OPENAI_API_VERSION
+    )
+elif settings.USE_OLLAMA or api_key == "ollama" or not api_key:
+    raw_client = OpenAI(
+        api_key="ollama",
+        base_url=settings.OLLAMA_BASE_URL
+    )
+elif api_key.startswith("AQ.") or api_key.startswith("AIzaSy"):
+    raw_client = OpenAI(
+        api_key=api_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
+else:
+    raw_client = OpenAI(
+        api_key=api_key
+    )
 
 # Export the wrapped client so the rest of the application uses it seamlessly
 client = GeminiOpenAIWrapper(raw_client)
+
 
 def get_openai_client():
     return client

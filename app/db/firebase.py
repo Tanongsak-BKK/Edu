@@ -7,6 +7,10 @@ except ImportError:
     fb_auth = None
     firestore = None
 
+import os
+import json
+import base64
+
 _db = None
 
 def init_firebase(project_id: str, cred_path: str = "./service-account.json"):
@@ -14,11 +18,29 @@ def init_firebase(project_id: str, cred_path: str = "./service-account.json"):
     if firebase_admin is not None and firestore is not None:
         try:
             if not firebase_admin._apps:
-                cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(
-                    cred,
-                    {"projectId": project_id} if project_id else None,
-                )
+                cred = None
+                env_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+                env_b64 = os.getenv("FIREBASE_SERVICE_ACCOUNT_BASE64")
+                
+                if env_json:
+                    cred_dict = json.loads(env_json)
+                    cred = credentials.Certificate(cred_dict)
+                elif env_b64:
+                    decoded = base64.b64decode(env_b64).decode("utf-8")
+                    cred_dict = json.loads(decoded)
+                    cred = credentials.Certificate(cred_dict)
+                elif os.path.exists(cred_path):
+                    cred = credentials.Certificate(cred_path)
+
+                if cred:
+                    firebase_admin.initialize_app(
+                        cred,
+                        {"projectId": project_id} if project_id else None,
+                    )
+                else:
+                    print("[Firebase] No service account file found, attempting default application credentials...")
+                    firebase_admin.initialize_app()
+                    
             _db = firestore.Client(project=project_id, database="default") if project_id else firestore.Client(database="default")
             print("Firebase Admin / Firestore initialized")
         except Exception as e:

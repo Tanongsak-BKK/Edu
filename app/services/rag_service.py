@@ -4,13 +4,8 @@ import os
 import math
 from typing import List, Dict
 from app.services.ai_service import client
-from sentence_transformers import SentenceTransformer
 
 RAG_CACHE_FILE = "rag_cache.json"
-
-# Initialize BAAI bge-m3 model locally (uses CUDA/GPU if available, otherwise CPU/MPS)
-print("[RAG] Loading local BAAI bge-m3 embedding model...")
-embedding_model = SentenceTransformer('BAAI/bge-m3')
 
 
 class RagService:
@@ -63,9 +58,17 @@ class RagService:
 
     @staticmethod
     def _get_embeddings(texts: List[str]) -> List[List[float]]:
-        # Use BAAI/bge-m3 model to generate normalized embeddings
-        embeddings = embedding_model.encode(texts, normalize_embeddings=True)
-        return embeddings.tolist()
+        if not texts:
+            return []
+        try:
+            response = client.embeddings.create(
+                input=texts,
+                model="text-embedding-3-small"
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            print(f"[RAG Error] Embedding generation failed: {e}")
+            return []
 
     @staticmethod
     def _load_cache() -> Dict:

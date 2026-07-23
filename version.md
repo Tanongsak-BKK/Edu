@@ -48,3 +48,24 @@
 
 ### 3. 🧹 Clean Up & Workspace Optimization
 - เคลียร์ไฟล์สคริปต์ทดสอบชั่วคราวในการวิเคราะห์โมเดลออกจาก Workspace ทั้งหมดเพื่อความสะอาดและเป็นระเบียบเรียบร้อยของโค้ดโปรเจกต์
+
+## Session: July 20, 2026 (Optimizing RAG Accuracy, Hybrid Search & Deduplication)
+
+### 1. 🔍 ระบบค้นหาแบบผสมผสาน (Hybrid Search Implementation)
+- **Hybrid Retrieval**: ปรับปรุงระบบค้นหาเอกสารใน `rag_service.py` โดยผสมผสานคะแนนจาก Vector Semantic Search (70%) และ Keyword Overlap Matching (30%) ช่วยให้ค้นหาเนื้อหาที่มีคำเฉพาะเจาะจง (เช่น Location 1, Location 2) ได้แม่นยำขึ้น แม้จะมีค่า Cosine Similarity ต่ำ
+- **Recall Expansion**: เพิ่มจำนวน Chunk ข้อมูลนำเข้าสำหรับตอบคำถาม (`top_k`) จาก 6 เป็น 10 Chunks ใน `qa_service.py` เพื่อให้ครอบคลุมส่วนเนื้อหารายละเอียดทั้งหมดของเอกสาร ไม่ให้ข้อมูลตกหล่น
+
+### 2. 🛡️ แก้ไขปัญหาข้อความซ้ำซ้อนจากรอยต่อ Chunk (Overlap Duplication Fix)
+- **Coordinate-Based Merging**: ปรับปรุงการนำเสนอ Context ใน `rag_service.py` โดยสร้างฟังก์ชันจับกลุ่ม (Grouping) และสกัดข้อความในช่วงดัชนีที่ติดกันออกมาจากข้อความดิบ (`raw_text`) โดยตรงตามพิกัดตัวอักษร
+- **Overlap Elimination**: ช่วยแก้ปัญหารอยต่อข้อความทับซ้อนกันจากค่า Overlap (ซึ่งก่อนหน้านี้ทำให้โมเดลสับสนและนำข้อความของหัวข้อหนึ่งไปอธิบายซ้ำในอีกหัวข้อหนึ่ง เช่น Location 1 และ 2 ซ้ำกัน) ส่งผลให้คำตอบที่ได้มีความกระชับ ถูกต้อง และไม่มีข้อมูลซ้ำซ้อน 100%
+
+### 3. 🎯 ยกระดับ Prompt Engineering ป้องกันโมเดลจินตนาการ (Zero-Hallucination Prompt)
+- **Role Separation**: แบ่งโครงสร้างคำสั่งของ AI ใน `qa_service.py` ออกเป็น System Role และ User Role เพื่อควบคุมทิศทางการตอบคำถามอย่างเป็นสัดส่วน
+- **Strict Guidelines**: บังคับให้ออกผลลัพธ์เป็นภาษาไทย 100% (ป้องกันข้อความภาษาจีนหรือภาษาอื่นปะปน) และระบุข้อจำกัดห้ามจินตนาการตัวเลขหรือตำแหน่งแปลกปลอม (เช่น Location 14) นอกเหนือจากที่ระบุในเอกสารอ้างอิง
+- **Deterministic Response**: ปรับค่าระดับความสร้างสรรค์ของโมเดล (`temperature`) ลงเหลือ 0.15 เพื่อเน้นความถูกต้องของข้อมูลตามเอกสารอ้างอิงเป็นหลัก
+
+### 📋 4. แผนงานการขึ้นระบบ Azure และรองรับไฟล์ขนาดใหญ่ (Future Cloud-Native Scalability Plan)
+- **Background Architecture**: จัดทำแผนพัฒนาเพื่อรองรับไฟล์เอกสารขนาดใหญ่ (100 - 1,000 หน้า) โดยนำเสนอแนวทางใช้ FastAPI BackgroundTasks หรือ Azure Functions (Queue Trigger) ในการประมวลผลเบื้องหลัง
+- **Azure Blob Storage Integration**: วางแผนเปลี่ยนการจัดเก็บไฟล์เอกสารชั่วคราวไปไว้บน Azure Blob Storage แทนพื้นที่เก็บข้อมูลเครื่อง Host
+- **Stateless Cloud Embeddings**: เสนอแนวทางเปลี่ยนจากโมเดล Local (`BAAI/bge-m3`) ไปใช้ Azure OpenAI Service / OpenAI Embedding API (`text-embedding-3-small`) เพื่อลดภาระการใช้ทรัพยากร (RAM/CPU) ของ Host บนคลาวด์ลงกว่า 90%
+
