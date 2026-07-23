@@ -47,8 +47,10 @@ jobs:
 
       - name: Prepare standalone artifact
         run: |
-          cp -R .next/static .next/standalone/.next/static
-          cp -R public .next/standalone/public
+          mkdir -p .next/standalone/.next/static
+          cp -R .next/static/* .next/standalone/.next/static/
+          mkdir -p .next/standalone/public
+          cp -R public/* .next/standalone/public/ 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
