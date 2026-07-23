@@ -8,6 +8,7 @@ on:
     paths:
       - "app/**"
       - "fonts/**"
+      - "tests/**"
       - "requirements.txt"
       - "requirements-dev.txt"
       - ".github/workflows/deploy-backend-azure-app-service.yml"
@@ -38,9 +39,9 @@ jobs:
 
       - name: Prepare artifact
         run: |
-          mkdir deploy
+          mkdir -p deploy
           cp -R app deploy/app
-          cp -R fonts deploy/fonts
+          cp -R fonts deploy/fonts 2>/dev/null || true
           cp requirements.txt deploy/requirements.txt
 
       - name: Upload artifact
