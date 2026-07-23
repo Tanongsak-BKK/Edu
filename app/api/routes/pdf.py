@@ -34,9 +34,9 @@ async def pdf_extract(pdf: UploadFile = File(...)):
                 else:
                     # Searchable text page: Use clean digital text
                     text = cleaned_extracted
-                    if has_diagram:
-                        # Analyze structural elements (graphs/networks) without repeating/duplicating standard text OCR
-                        print(f"[PDF] Page {p.page_number} has diagrams. Running vision analysis...")
+                    # Only analyze complex diagrams if images exist and digital text is minimal
+                    if len(p.images) > 1 and len(cleaned_extracted) < 300:
+                        print(f"[PDF] Page {p.page_number} has complex diagrams. Running vision analysis...")
                         vision_text = ImageAnalysisService.process_pdf_page(p, skip_ocr=True)
                         if vision_text:
                             text = text + "\n" + vision_text
@@ -66,5 +66,5 @@ async def pdf_extract(pdf: UploadFile = File(...)):
     return {
         "document_id": doc_id, 
         "text": text,
-        "pdf_url": f"http://localhost:8000/static/pdfs/{doc_id}.pdf"
+        "pdf_url": f"/static/pdfs/{doc_id}.pdf"
     }

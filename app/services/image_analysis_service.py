@@ -85,9 +85,9 @@ class ImageAnalysisService:
             
         print(f"[Vision] Processing page {page.page_number} with Vision AI (ocr_only={ocr_only}, skip_ocr={skip_ocr})...")
         
-        # --- PASS 1: Hybrid OCR + Structure Extraction ---
+        # --- Single Pass Vision AI Processing ---
         if ocr_only:
-            prompt_pass1 = """
+            prompt = """
             Extract all Thai and English text from this image.
             Response must be in JSON format:
             {
@@ -96,42 +96,42 @@ class ImageAnalysisService:
             Do not include diagrams or structures. Perform actual OCR.
             """
         elif skip_ocr:
-            prompt_pass1 = """
+            prompt = """
             Analyze any diagrams, networks, graphs, or charts in this image.
             Response must be in JSON format:
             {
-              "structure": {
+              "is_complex_diagram": true,
+              "summary": "Brief summary of diagram in Thai",
+              "verified_structure": {
                  "nodes": ["list of devices/nodes if any"],
                  "edges": ["list of connections if any"],
                  "datapoints": ["list of data points/axes if any"]
                }
             }
-            Ignore plain paragraph text. Only analyze structural elements/diagrams.
             """
         else:
-            prompt_pass1 = """
+            prompt = """
             Extract all text and structure from this image.
             Response must be in JSON format:
             {
               "raw_ocr": "Put all extracted Thai and English text here",
-              "structure": {
+              "is_complex_diagram": false,
+              "summary": "Brief summary of image content in Thai",
+              "verified_structure": {
                  "nodes": ["list of devices/nodes if any"],
-                 "edges": ["list of connections if any"],
-                 "datapoints": ["list of data points/axes if any"]
+                 "edges": ["list of connections if any"]
                }
             }
-            Do not repeat these instructions in the JSON. Perform actual OCR.
             """
         
         try:
-            # Try Local Ollama Vision first
-            res1 = client.chat.completions.create(
+            res = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": prompt_pass1},
+                            {"type": "text", "text": prompt},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}
                         ]
                     }
@@ -139,75 +139,28 @@ class ImageAnalysisService:
                 response_format={"type": "json_object"},
                 temperature=0.1
             )
-            pass1_json_str = res1.choices[0].message.content
-            pass1_data = ImageAnalysisService._parse_json_robust(pass1_json_str)
+            data = ImageAnalysisService._parse_json_robust(res.choices[0].message.content)
             
-            # If JSON parsing failed entirely but we got raw text, use it as fallback for ocr_only
-            if not pass1_data and ocr_only:
-                if pass1_json_str:
-                    return f"\nข้อความที่สแกนจากภาพ: {pass1_json_str.strip()}\n"
-                raise ValueError("Empty response from local vision AI")
-                
             if ocr_only:
-                raw_ocr = pass1_data.get("raw_ocr", "")
+                raw_ocr = data.get("raw_ocr", "")
                 if raw_ocr:
                     return f"\nข้อความที่สแกนจากภาพ: {raw_ocr}\n"
                 return ""
             
-            # --- PASS 2: Reflection & QA Auditor ---
+            output_text = "\n\n"
             if skip_ocr:
-                prompt_pass2 = f"""
-                You are a QA Auditor checking diagram data extracted from the image.
-                First pass data:
-                {pass1_json_str}
+                if data.get("is_complex_diagram", True):
+                    output_text += f"--- ข้อมูลรูปภาพ/แผนผัง (หน้าที่ {page.page_number}) ---\n"
+                    output_text += f"บทสรุปภาพรวมแผนผัง: {data.get('summary', '')}\n"
+                    output_text += f"โครงสร้างเชิงลึก (Nodes/Edges/Data):\n"
+                    output_text += json.dumps(data.get("verified_structure", {}), ensure_ascii=False, indent=2) + "\n"
+                    output_text += "------------------------\n\n"
+                return output_text
                 
-                Verify that the diagram structure matches the image.
-                Return a JSON response:
-                {{
-                    "is_complex_diagram": true if this image contains a diagram/chart/network/circuit, false otherwise,
-                    "summary": "Brief explanation of what this diagram/chart represents in Thai",
-                    "verified_structure": {{ verified nodes/edges/datapoints }}
-                }}
-                """
-            else:
-                prompt_pass2 = f"""
-                You are a QA Auditor checking data extracted from the image.
-                First pass data:
-                {pass1_json_str}
-                
-                Verify that the extracted structure matches the image.
-                Return a JSON response:
-                {{
-                    "is_complex_diagram": true if this image contains a diagram/chart/network/circuit, false if it is just plain text or decorative illustration,
-                    "summary": "Brief summary of the image content in Thai",
-                    "verified_structure": {{ verified nodes/edges/datapoints }}
-                }}
-                """
-            
-            res2 = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt_pass2},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}
-                        ]
-                    }
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1
-            )
-            
-            final_data = ImageAnalysisService._parse_json_robust(res2.choices[0].message.content)
-            
-            # If final parsing failed but pass1 succeeded, fallback to pass1 data
-            if not final_data:
-                final_data = {
-                    "is_complex_diagram": bool(pass1_data.get("structure")),
-                    "summary": "สแกนแผนผังรูปภาพในหน้าเอกสาร",
-                    "verified_structure": pass1_data.get("structure", {})
-                }
+            raw_ocr = data.get("raw_ocr", "")
+            if raw_ocr:
+                output_text += f"ข้อความจากภาพ: {raw_ocr}\n"
+            return output_text
             
             # ถอดรหัสสิ่งที่ได้กลับมาเป็น Markdown เพื่อนำไปทำ RAG
             output_text = "\n\n"
