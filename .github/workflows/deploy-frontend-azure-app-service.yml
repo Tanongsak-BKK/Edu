@@ -47,22 +47,14 @@ jobs:
 
       - name: Prepare standalone artifact
         run: |
-          mkdir -p deploy
-          if [ -d ".next/standalone/frontend" ]; then
-            cp -R .next/static .next/standalone/frontend/.next/static
-            cp -R public .next/standalone/frontend/public
-            cp -R .next/standalone/frontend/. deploy/
-          else
-            cp -R .next/static .next/standalone/.next/static
-            cp -R public .next/standalone/public
-            cp -R .next/standalone/. deploy/
-          fi
+          cp -R .next/static .next/standalone/.next/static
+          cp -R public .next/standalone/public
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-app
-          path: frontend/deploy
+          path: frontend/.next/standalone
 
   deploy:
     runs-on: ubuntu-latest
